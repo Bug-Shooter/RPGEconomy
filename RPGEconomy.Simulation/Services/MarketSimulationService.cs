@@ -20,7 +20,7 @@ public class MarketSimulationService
                     .Sum(i => i.Quantity);
 
                 // Спрос = упрощённо: базовый спрос пропорционален населению
-                // В V2 заменим на реальный спрос из ConsumptionProfile
+                // В V2 изменить на реальный спрос из ConsumptionProfile
                 var demand = CalculateBaseDemand(settlement.Population, offer.ProductTypeId);
 
                 market.UpdateMarket(offer.ProductTypeId, supply, demand);

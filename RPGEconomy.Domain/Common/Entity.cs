@@ -3,10 +3,8 @@ public abstract class Entity
 {
     public int Id { get; private set; }
 
-    // Для создания нового объекта в коде
     protected Entity() => Id = 0;
 
-    // Для восстановления из БД через Dapper
     protected Entity(int id) => Id = id;
 
     public bool IsNew => Id == 0;

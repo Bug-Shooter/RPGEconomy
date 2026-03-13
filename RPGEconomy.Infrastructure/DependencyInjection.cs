@@ -42,7 +42,8 @@ public static class DependencyInjection
         services.Decorate<ISimulationEngine, LoggingSimulationDecorator>();
         services.Decorate<ISimulationEngine, TransactionSimulationDecorator>();
 
-        // Application Services //Todo: Скорее всего разделение не нада и можно вверх кинуть
+        // Application Services 
+        //Todo: Скорее всего разделение не нада и можно вверх кинуть
         services.AddScoped<IWorldService, WorldService>();
         services.AddScoped<ISettlementService, SettlementService>();
         services.AddScoped<IMarketService, MarketService>();

@@ -48,30 +48,26 @@ public class SimulationEngine : ISimulationEngine
 
         var daysBefore = world.CurrentDay;
 
-        // Загружаем контекст один раз
+        // Загружаем контекст один раз, не прыгаем в базу на каждом тике
         var ctx = await LoadContextAsync(worldId, world.CurrentDay);
 
-        // Прогоняем N тиков
         for (int i = 0; i < days; i++)
         {
             RunTick(ctx);
         }
 
-        // Сохраняем изменённые агрегаты
         await PersistContextAsync(ctx);
 
-        // Обновляем текущий день мира
         world.AdvanceDays(days);
         await _worldRepo.SaveAsync(world);
 
-        // Формируем результат
         var result = BuildResult(worldId, daysBefore, world.CurrentDay, ctx);
         return Result<SimulationResultDto>.Success(result);
     }
 
     private void RunTick(SimulationContext ctx)
     {
-        // Порядок важен: сначала производство, потом рынок
+        // Порядок важен!!!!!! : сначала производство, потом рынок
         _productionService.RunTick(ctx);
         _marketService.RunTick(ctx);
     }
