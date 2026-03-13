@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="RPGEconomy.API/RPGEconomy.API.csproj" />
+  <Project Path="RPGEconomy.Application/RPGEconomy.Application.csproj" />
+  <Project Path="RPGEconomy.Domain/RPGEconomy.Domain.csproj" />
+  <Project Path="RPGEconomy.Infrastructure/RPGEconomy.Infrastructure.csproj" />
+  <Project Path="RPGEconomy.Simulation/RPGEconomy.Simulation.csproj" />
+</Solution>

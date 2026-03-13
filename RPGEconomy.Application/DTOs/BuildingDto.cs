@@ -1,0 +1,9 @@
+﻿namespace RPGEconomy.Application.DTOs;
+
+public record BuildingDto(
+    int Id,
+    string Name,
+    int SettlementId,
+    int RecipeId,
+    int WorkerCount,
+    bool IsActive);
