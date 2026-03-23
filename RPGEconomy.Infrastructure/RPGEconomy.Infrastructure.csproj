@@ -9,7 +9,6 @@
   <ItemGroup>
     <ProjectReference Include="..\RPGEconomy.Application\RPGEconomy.Application.csproj" />
     <ProjectReference Include="..\RPGEconomy.Domain\RPGEconomy.Domain.csproj" />
-    <ProjectReference Include="..\RPGEconomy.Simulation\RPGEconomy.Simulation.csproj" />
   </ItemGroup>
 
   <ItemGroup>

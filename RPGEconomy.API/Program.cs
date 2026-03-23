@@ -1,6 +1,8 @@
 using RPGEconomy.API.Middleware;
+using RPGEconomy.Application;
 using RPGEconomy.Infrastructure;
 using RPGEconomy.Infrastructure.Migrations;
+using RPGEconomy.Simulation;
 
 namespace RPGEconomy.API;
 
@@ -14,7 +16,10 @@ public class Program
                         ?? throw new InvalidOperationException("Connection string not found");
 
         // Add services to the container.
+        builder.Services.AddApplication();
         builder.Services.AddInfrastructure(connectionString);
+        builder.Services.AddSimulation();
+        builder.Services.AddSimulationExecutionDecorators();
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
 

@@ -8,7 +8,7 @@ using RPGEconomy.Simulation.Services;
 
 namespace RPGEconomy.Simulation.Engine;
 
-public class SimulationEngine : ISimulationEngine
+public class SimulationEngine : ISimulationExecutor
 {
     private readonly IWorldRepository _worldRepo;
     private readonly ISettlementRepository _settlementRepo;
@@ -40,11 +40,16 @@ public class SimulationEngine : ISimulationEngine
         _marketService = marketService;
     }
 
-    public async Task<Result<SimulationResultDto>> AdvanceAsync(int worldId, int days)
+    public async Task<Result<SimulationExecutionResult>> ExecuteAsync(
+        SimulationExecutionRequest request,
+        CancellationToken cancellationToken = default)
     {
+        var worldId = request.WorldId;
+        var days = request.Days;
+
         var world = await _worldRepo.GetByIdAsync(worldId);
         if (world is null)
-            return Result<SimulationResultDto>.Failure($"Мир с Id {worldId} не найден");
+            return Result<SimulationExecutionResult>.Failure($"Мир с Id {worldId} не найден");
 
         var daysBefore = world.CurrentDay;
 
@@ -62,7 +67,7 @@ public class SimulationEngine : ISimulationEngine
         await _worldRepo.SaveAsync(world);
 
         var result = BuildResult(worldId, daysBefore, world.CurrentDay, ctx);
-        return Result<SimulationResultDto>.Success(result);
+        return Result<SimulationExecutionResult>.Success(new SimulationExecutionResult(result));
     }
 
     private void RunTick(SimulationContext ctx)

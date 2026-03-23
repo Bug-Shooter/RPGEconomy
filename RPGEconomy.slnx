@@ -1,4 +1,14 @@
 <Solution>
+  <Folder Name="/docs/">
+    <File Path="docs/architecture.md" />
+  </Folder>
+  <Folder Name="/docs/adr/">
+    <File Path="docs/adr/0001-layered-solution-boundaries.md" />
+    <File Path="docs/adr/0002-thin-controller-http-layer.md" />
+    <File Path="docs/adr/0003-result-based-business-error-handling.md" />
+    <File Path="docs/adr/0004-dapper-repositories-with-handwritten-sql.md" />
+    <File Path="docs/adr/0005-simulation-engine-composed-via-abstractions-and-decorators.md" />
+  </Folder>
   <Project Path="RPGEconomy.API/RPGEconomy.API.csproj" />
   <Project Path="RPGEconomy.Application/RPGEconomy.Application.csproj" />
   <Project Path="RPGEconomy.Domain/RPGEconomy.Domain.csproj" />
