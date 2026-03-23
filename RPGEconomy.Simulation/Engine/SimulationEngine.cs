@@ -135,7 +135,7 @@ public class SimulationEngine : ISimulationExecutor
                     .ToList().AsReadOnly()
                 : (IReadOnlyList<MarketPriceDto>)[];
 
-            return new SettlementSummaryDto(s.Id, s.Name, inventory, prices);
+            return new SettlementSummaryDto(s.Id, s.Name, s.Population, inventory, prices);
         }).ToList().AsReadOnly();
 
         return new SimulationResultDto(worldId, daysBefore, daysAfter, settlements);

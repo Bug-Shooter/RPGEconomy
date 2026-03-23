@@ -52,7 +52,7 @@ public class SettlementService : ISettlementService
         await _marketRepo.SaveAsync(market);
 
         return Result<SettlementSummaryDto>.Success(
-            new SettlementSummaryDto(settlementId, name, [], []));
+            new SettlementSummaryDto(settlementId, name, population, [], []));
     }
 
     public async Task<Result<SettlementSummaryDto>> GetByIdAsync(int id)
@@ -75,7 +75,7 @@ public class SettlementService : ISettlementService
             .AsReadOnly() ?? (IReadOnlyList<MarketPriceDto>)[];
 
         return Result<SettlementSummaryDto>.Success(
-            new SettlementSummaryDto(settlement.Id, settlement.Name, inventoryItems, prices));
+            new SettlementSummaryDto(settlement.Id, settlement.Name, settlement.Population, inventoryItems, prices));
     }
 
     public async Task<Result<IReadOnlyList<SettlementSummaryDto>>> GetByWorldIdAsync(int worldId)
@@ -87,7 +87,7 @@ public class SettlementService : ISettlementService
         var settlements = await _settlementRepo.GetByWorldIdAsync(worldId);
 
         var dtos = settlements
-            .Select(s => new SettlementSummaryDto(s.Id, s.Name, [], []))
+            .Select(s => new SettlementSummaryDto(s.Id, s.Name, s.Population, [], []))
             .ToList()
             .AsReadOnly();
 
@@ -110,7 +110,7 @@ public class SettlementService : ISettlementService
         await _settlementRepo.SaveAsync(settlement);
 
         return Result<SettlementSummaryDto>.Success(
-            new SettlementSummaryDto(settlement.Id, settlement.Name, [], []));
+            new SettlementSummaryDto(settlement.Id, settlement.Name, settlement.Population, [], []));
     }
 
     public async Task<Result> DeleteAsync(int id)
