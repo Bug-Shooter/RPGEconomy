@@ -1,7 +1,8 @@
-﻿using Dapper;
+using Dapper;
 using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Domain.World;
 using RPGEconomy.Infrastructure.Persistence.Queries;
+using System.Data;
 
 namespace RPGEconomy.Infrastructure.Persistence.Repositories;
 
@@ -52,6 +53,11 @@ public class SettlementRepository : ISettlementRepository
     public async Task DeleteAsync(int id)
     {
         using var conn = _factory.Create();
-        await conn.ExecuteAsync(SettlementQueries.Delete, new { Id = id });
+        if (conn.State != ConnectionState.Open)
+            conn.Open();
+
+        using var tx = conn.BeginTransaction();
+        await conn.ExecuteAsync(SettlementQueries.Delete, new { Id = id }, tx);
+        tx.Commit();
     }
 }

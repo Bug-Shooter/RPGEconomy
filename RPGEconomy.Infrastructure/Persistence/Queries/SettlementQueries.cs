@@ -28,7 +28,31 @@ internal static class SettlementQueries
         """;
 
     public const string Delete = """
-        DELETE FROM settlements WHERE id = @Id
+        DELETE FROM inventory_items
+        WHERE warehouse_id IN (
+            SELECT id
+            FROM warehouses
+            WHERE settlement_id = @Id
+        );
+
+        DELETE FROM market_offers
+        WHERE market_id IN (
+            SELECT id
+            FROM markets
+            WHERE settlement_id = @Id
+        );
+
+        DELETE FROM buildings
+        WHERE settlement_id = @Id;
+
+        DELETE FROM warehouses
+        WHERE settlement_id = @Id;
+
+        DELETE FROM markets
+        WHERE settlement_id = @Id;
+
+        DELETE FROM settlements
+        WHERE id = @Id;
         """;
 }
 
