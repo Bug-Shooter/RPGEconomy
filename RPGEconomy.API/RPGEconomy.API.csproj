@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\RPGEconomy.Application\RPGEconomy.Application.csproj" />
     <ProjectReference Include="..\RPGEconomy.Infrastructure\RPGEconomy.Infrastructure.csproj" />
+    <ProjectReference Include="..\RPGEconomy.Simulation\RPGEconomy.Simulation.csproj" />
   </ItemGroup>
 
 </Project>

@@ -7,10 +7,10 @@ namespace RPGEconomy.API.Controllers;
 [ApiController]
 public class SimulationController : ControllerBase
 {
-    private readonly ISimulationEngine _simulationEngine;
+    private readonly ISimulationService _simulationService;
 
-    public SimulationController(ISimulationEngine simulationEngine)
-        => _simulationEngine = simulationEngine;
+    public SimulationController(ISimulationService simulationService)
+        => _simulationService = simulationService;
 
     //// GET: api/<SimulationController>
     //[HttpGet]
@@ -35,7 +35,7 @@ public class SimulationController : ControllerBase
         if (request.Days <= 0)
             return BadRequest("Количество дней должно быть больше нуля");
 
-        var result = await _simulationEngine.AdvanceAsync(worldId, request.Days);
+        var result = await _simulationService.AdvanceAsync(new(worldId, request.Days));
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 

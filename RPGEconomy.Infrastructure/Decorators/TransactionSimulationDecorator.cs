@@ -5,26 +5,28 @@ using RPGEconomy.Infrastructure.Persistence;
 
 namespace RPGEconomy.Infrastructure.Decorators;
 
-public class TransactionSimulationDecorator : ISimulationEngine
+public class TransactionSimulationDecorator : ISimulationExecutor
 {
-    private readonly ISimulationEngine _inner;
+    private readonly ISimulationExecutor _inner;
     private readonly IDbConnectionFactory _factory;
 
     public TransactionSimulationDecorator(
-        ISimulationEngine inner, IDbConnectionFactory factory)
+        ISimulationExecutor inner, IDbConnectionFactory factory)
     {
         _inner = inner;
         _factory = factory;
     }
 
-    public async Task<Result<SimulationResultDto>> AdvanceAsync(int worldId, int days)
+    public async Task<Result<SimulationExecutionResult>> ExecuteAsync(
+        SimulationExecutionRequest request,
+        CancellationToken cancellationToken = default)
     {
         using var conn = _factory.Create();
         using var tx = conn.BeginTransaction();
 
         try
         {
-            var result = await _inner.AdvanceAsync(worldId, days);
+            var result = await _inner.ExecuteAsync(request, cancellationToken);
             tx.Commit();
             return result;
         }
