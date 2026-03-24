@@ -9,9 +9,19 @@
     <File Path="docs/adr/0004-dapper-repositories-with-handwritten-sql.md" />
     <File Path="docs/adr/0005-simulation-engine-composed-via-abstractions-and-decorators.md" />
   </Folder>
-  <Project Path="RPGEconomy.API/RPGEconomy.API.csproj" />
-  <Project Path="RPGEconomy.Application/RPGEconomy.Application.csproj" />
-  <Project Path="RPGEconomy.Domain/RPGEconomy.Domain.csproj" />
-  <Project Path="RPGEconomy.Infrastructure/RPGEconomy.Infrastructure.csproj" />
-  <Project Path="RPGEconomy.Simulation/RPGEconomy.Simulation.csproj" />
+  <Folder Name="/src/">
+    <Project Path="RPGEconomy.API/RPGEconomy.API.csproj" />
+    <Project Path="RPGEconomy.Application/RPGEconomy.Application.csproj" />
+    <Project Path="RPGEconomy.Domain/RPGEconomy.Domain.csproj" />
+    <Project Path="RPGEconomy.Infrastructure/RPGEconomy.Infrastructure.csproj" />
+    <Project Path="RPGEconomy.Simulation/RPGEconomy.Simulation.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="RPGEconomy.API.IntegrationTests/RPGEconomy.API.IntegrationTests.csproj" />
+    <Project Path="RPGEconomy.Application.Tests/RPGEconomy.Application.Tests.csproj" />
+    <Project Path="RPGEconomy.Domain.Tests/RPGEconomy.Domain.Tests.csproj" />
+    <Project Path="RPGEconomy.Infrastructure.IntegrationTests/RPGEconomy.Infrastructure.IntegrationTests.csproj" />
+    <Project Path="RPGEconomy.Simulation.Tests/RPGEconomy.Simulation.Tests.csproj" />
+    <Project Path="RPGEconomy.Testing/RPGEconomy.Testing.csproj" />
+  </Folder>
 </Solution>

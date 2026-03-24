@@ -43,6 +43,12 @@ public class ProductTypeService : IProductTypeService
     public async Task<Result<ProductTypeDto>> UpdateAsync(
         int id, string name, string description, double basePrice, double weightPerUnit)
     {
+        if (string.IsNullOrWhiteSpace(name))
+            return Result<ProductTypeDto>.Failure("Название товара не может быть пустым");
+
+        if (basePrice <= 0)
+            return Result<ProductTypeDto>.Failure("Базовая цена должна быть больше нуля");
+
         var product = await _repo.GetByIdAsync(id);
         if (product is null) return Result<ProductTypeDto>.Failure($"Товар с Id {id} не найден");
 

@@ -1,39 +1,28 @@
-﻿using RPGEconomy.Application.Abstractions.Services;
+using RPGEconomy.Application.Abstractions.Services;
 using RPGEconomy.Application.DTOs;
 using RPGEconomy.Domain.Common;
-using RPGEconomy.Infrastructure.Persistence;
+using System.Transactions;
 
 namespace RPGEconomy.Infrastructure.Decorators;
 
 public class TransactionSimulationDecorator : ISimulationExecutor
 {
     private readonly ISimulationExecutor _inner;
-    private readonly IDbConnectionFactory _factory;
 
-    public TransactionSimulationDecorator(
-        ISimulationExecutor inner, IDbConnectionFactory factory)
-    {
-        _inner = inner;
-        _factory = factory;
-    }
+    public TransactionSimulationDecorator(ISimulationExecutor inner)
+        => _inner = inner;
 
     public async Task<Result<SimulationExecutionResult>> ExecuteAsync(
         SimulationExecutionRequest request,
         CancellationToken cancellationToken = default)
     {
-        using var conn = _factory.Create();
-        using var tx = conn.BeginTransaction();
+        using var scope = new TransactionScope(
+            TransactionScopeOption.Required,
+            TransactionScopeAsyncFlowOption.Enabled);
 
-        try
-        {
-            var result = await _inner.ExecuteAsync(request, cancellationToken);
-            tx.Commit();
-            return result;
-        }
-        catch
-        {
-            tx.Rollback();
-            throw;
-        }
+        var result = await _inner.ExecuteAsync(request, cancellationToken);
+
+        scope.Complete();
+        return result;
     }
 }

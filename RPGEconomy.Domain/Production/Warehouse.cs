@@ -52,6 +52,7 @@ public class Warehouse : AggregateRoot
         ingredients.All(ing =>
             _items.Any(i =>
                 i.ProductTypeId == ing.ProductTypeId &&
+                i.Quality == QualityGrade.Normal.Name &&
                 i.Quantity >= ing.Quantity));
 
     internal void LoadItems(IEnumerable<InventoryItem> items)
