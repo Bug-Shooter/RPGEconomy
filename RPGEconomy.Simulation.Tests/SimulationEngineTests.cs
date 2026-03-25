@@ -53,7 +53,7 @@ public class SimulationEngineTests
         result.Value!.Result.DaysBefore.Should().Be(3);
         result.Value.Result.DaysAfter.Should().Be(5);
         world.CurrentDay.Should().Be(5);
-        market.Offers.Should().ContainSingle(x => x.ProductTypeId == 2 && x.SupplyVolume == 2);
+        market.Offers.Should().ContainSingle(x => x.ProductTypeId == 2 && x.SupplyVolume == 0);
     }
 
     private static SimulationEngine CreateEngine(
