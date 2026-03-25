@@ -10,7 +10,7 @@ using RPGEconomy.Testing;
 
 namespace RPGEconomy.Infrastructure.IntegrationTests;
 
-[Collection(DatabaseCollection.Name)]
+[Collection(IntegrationTestCollection.Database)]
 public class AggregateRepositoryTests
 {
     private readonly DatabaseFixture _fixture;

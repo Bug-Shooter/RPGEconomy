@@ -1,7 +1,8 @@
+using RPGEconomy.Testing;
+
 namespace RPGEconomy.API.IntegrationTests;
 
-[CollectionDefinition(Name)]
+[CollectionDefinition(IntegrationTestCollection.Database)]
 public sealed class DatabaseCollection : ICollectionFixture<DatabaseFixture>
 {
-    public const string Name = "database";
 }

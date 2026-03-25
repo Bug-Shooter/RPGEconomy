@@ -12,6 +12,15 @@ The solution contains five production projects:
 - `RPGEconomy.Infrastructure`
 - `RPGEconomy.Simulation`
 
+It also contains six test-support and test-execution projects:
+
+- `RPGEconomy.API.IntegrationTests`
+- `RPGEconomy.Application.Tests`
+- `RPGEconomy.Domain.Tests`
+- `RPGEconomy.Infrastructure.IntegrationTests`
+- `RPGEconomy.Simulation.Tests`
+- `RPGEconomy.Testing`
+
 The current project reference directions are:
 
 - `RPGEconomy.API` -> `RPGEconomy.Application`
@@ -284,6 +293,16 @@ The solution now includes automated tests split by concern:
 
 Integration tests use a dedicated PostgreSQL configuration from `RPGEconomy.Testing/appsettings.Test.json`. The API integration host and lower-level database helpers both resolve the same test connection string through configuration rather than hardcoded values.
 
+`RPGEconomy.Testing` is also the home for the shared integration-test fixture and synchronization primitives:
+
+- `DatabaseFixture` centralizes database bootstrap and reset lifecycle
+- `IntegrationTestCollection` centralizes the xUnit collection name used by integration-test assemblies
+- `GlobalTestDatabaseLock` serializes access to the shared PostgreSQL test database across integration-test processes
+
+The integration-test projects intentionally keep only thin assembly-specific `CollectionDefinition` glue so the actual lifecycle logic is not duplicated across projects.
+
+At the test runner level, the practical full-suite command is `dotnet test RPGEconomy.slnx -m:1`. Even though integration-test assemblies disable xUnit test parallelization internally, solution-level sequential execution is still important because both integration-test projects share one PostgreSQL environment.
+
 ## Notable structural patterns currently present
 
 The codebase currently combines several recognizable patterns:
@@ -304,4 +323,5 @@ These patterns are all present in the implementation today and are the basis of 
 
 - Simulation requests are still synchronous at the HTTP boundary
 - PostgreSQL integration tests require a live database
+- Full-solution test runs should be executed sequentially at the project level because API and infrastructure integration tests share one PostgreSQL environment
 - No centralized validation

@@ -2,11 +2,12 @@ using FluentAssertions;
 using RPGEconomy.Domain.Simulation;
 using RPGEconomy.Infrastructure.Persistence;
 using RPGEconomy.Infrastructure.Persistence.Repositories;
+using RPGEconomy.Testing;
 using WorldEntity = RPGEconomy.Domain.World.World;
 
 namespace RPGEconomy.Infrastructure.IntegrationTests;
 
-[Collection(DatabaseCollection.Name)]
+[Collection(IntegrationTestCollection.Database)]
 public class RepositoryRoundtripTests
 {
     private readonly DatabaseFixture _fixture;

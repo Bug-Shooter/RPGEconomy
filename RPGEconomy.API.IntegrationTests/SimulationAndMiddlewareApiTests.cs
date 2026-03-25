@@ -10,7 +10,7 @@ using System.Net.Http.Json;
 
 namespace RPGEconomy.API.IntegrationTests;
 
-[Collection(DatabaseCollection.Name)]
+[Collection(IntegrationTestCollection.Database)]
 public class SimulationAndMiddlewareApiTests : IAsyncLifetime
 {
     private readonly DatabaseFixture _fixture;
