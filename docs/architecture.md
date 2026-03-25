@@ -172,7 +172,12 @@ There is no EF Core `DbContext` in the current code.
 
 For aggregate-like objects with child collections, repositories persist the root and then replace child rows explicitly. Examples include markets and warehouses, where offers/items are deleted and re-inserted during save operations.
 
-Database migrations run during application startup. `Program.cs` creates `MigrationRunner` directly, and the runner:
+Database migrations run during application startup. Connection string resolution is centralized around the shared ASP.NET Core configuration:
+
+- `RPGEconomy.Infrastructure` resolves `ConnectionStrings:DefaultConnection` from `IConfiguration` when constructing `IDbConnectionFactory`
+- `Program.cs` calls `RunDatabaseMigrations()` on the application configuration, and that extension resolves the same configured connection string before invoking `MigrationRunner`
+
+The runner:
 
 - ensures the PostgreSQL database exists
 - runs embedded SQL scripts with DbUp
@@ -233,7 +238,7 @@ Unexpected exceptions are handled by custom middleware in `RPGEconomy.API`.
 
 Exceptions are still used in a few infrastructure/startup paths, for example:
 
-- missing connection string in `Program.cs`
+- missing connection string during infrastructure registration or migration startup
 - failed database upgrade in `MigrationRunner`
 - invalid day count in `SimulationClock`
 
@@ -268,14 +273,16 @@ There is no separate logging package or custom logging infrastructure in the sol
 
 ## Testing style
 
-No automated test project is present in the solution, and no test package references were found in the repository.
+The solution now includes automated tests split by concern:
 
-As the code exists today:
+- `RPGEconomy.Domain.Tests` for domain unit tests
+- `RPGEconomy.Application.Tests` for application-service unit tests
+- `RPGEconomy.Simulation.Tests` for simulation unit tests
+- `RPGEconomy.Infrastructure.IntegrationTests` for repository and infrastructure integration tests against PostgreSQL
+- `RPGEconomy.API.IntegrationTests` for end-to-end HTTP tests
+- `RPGEconomy.Testing` as shared test support for PostgreSQL reset/bootstrap and test configuration
 
-- there are no unit test projects
-- there are no integration test projects
-- there are no API test projects
-- there is no visible test harness around persistence or simulation
+Integration tests use a dedicated PostgreSQL configuration from `RPGEconomy.Testing/appsettings.Test.json`. The API integration host and lower-level database helpers both resolve the same test connection string through configuration rather than hardcoded values.
 
 ## Notable structural patterns currently present
 
@@ -296,5 +303,5 @@ These patterns are all present in the implementation today and are the basis of 
 ## Known Trade-offs
 
 - Simulation requests are still synchronous at the HTTP boundary
-- No test coverage
+- PostgreSQL integration tests require a live database
 - No centralized validation

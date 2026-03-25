@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RPGEconomy.API;
@@ -16,19 +16,13 @@ public class TestApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        Environment.SetEnvironmentVariable(
-            "ConnectionStrings__DefaultConnection",
-            TestConnectionStrings.TestDatabase);
+        var settingsPath = TestConnectionStrings.GetSettingsPath();
+
         builder.UseEnvironment("Development");
-        
-        // Не работает. Пропускает часть запросов в основную БД.
-        //builder.ConfigureAppConfiguration((_, config) =>
-        //{
-        //    config.AddInMemoryCollection(new Dictionary<string, string?>
-        //    {
-        //        ["ConnectionStrings:DefaultConnection"] = TestConnectionStrings.TestDatabase
-        //    });
-        //});
+        builder.ConfigureAppConfiguration((_, config) =>
+        {
+            config.AddJsonFile(settingsPath, optional: false, reloadOnChange: false);
+        });
 
         if (_configureServices is not null)
         {

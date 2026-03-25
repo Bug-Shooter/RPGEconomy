@@ -1,7 +1,8 @@
-using FluentAssertions;
-using RPGEconomy.Testing;
 using System.Net;
 using System.Net.Http.Json;
+using FluentAssertions;
+using Microsoft.VisualStudio.TestPlatform.Utilities;
+using RPGEconomy.Testing;
 
 namespace RPGEconomy.API.IntegrationTests;
 
@@ -13,13 +14,14 @@ public class SettlementsBuildingsMarketsApiTests : IAsyncLifetime
 
     public SettlementsBuildingsMarketsApiTests(DatabaseFixture fixture)
         => _fixture = fixture;
-
+    
     public ValueTask InitializeAsync() => new(PostgresTestDatabase.ResetAsync());
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     [Fact]
     public async Task Settlement_Building_And_Market_Endpoints_Should_Work_EndToEnd()
     {
+        await _fixture.InitializeAsync();
         var client = _factory.CreateClient();
         await using var connection = await PostgresTestDatabase.OpenConnectionAsync();
         var seed = new TestDataSeeder(connection);
