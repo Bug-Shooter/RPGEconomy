@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.Abstractions.Services;
 using RPGEconomy.Infrastructure.Decorators;
@@ -9,22 +10,25 @@ namespace RPGEconomy.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(
-        this IServiceCollection services,
-        string connectionString)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
-        // DbConnectionFactory
-        services.AddSingleton<IDbConnectionFactory>(
-            _ => new NpgsqlConnectionFactory(connectionString));
+        services.AddSingleton<IDbConnectionFactory>(serviceProvider =>
+        {
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+            var connectionString = configuration.GetConnectionString("DefaultConnection")
+                ?? throw new InvalidOperationException("Connection string not found");
 
-        // Repositories — Scrutor scan
+            return new NpgsqlConnectionFactory(connectionString);
+        });
+
+        // Repositories - Scrutor scan
         services.Scan(scan => scan
             .FromAssemblyOf<WorldRepository>()
             .AddClasses(c => c.AssignableTo(typeof(IRepository<>)))
             .AsImplementedInterfaces()
             .WithScopedLifetime());
 
-        // Интерфейсы репозиториев не покрытые IRepository<T>
+        // Repository interfaces not covered by IRepository<T>
         services.AddScoped<IWarehouseRepository, WarehouseRepository>();
         services.AddScoped<IMarketRepository, MarketRepository>();
         services.AddScoped<ISettlementRepository, SettlementRepository>();
@@ -41,4 +45,3 @@ public static class DependencyInjection
         return services;
     }
 }
-
