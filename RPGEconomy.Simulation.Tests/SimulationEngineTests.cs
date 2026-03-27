@@ -5,9 +5,9 @@ using RPGEconomy.Domain.Markets;
 using RPGEconomy.Domain.Population;
 using RPGEconomy.Domain.Production;
 using RPGEconomy.Domain.Resources;
+using RPGEconomy.Domain.World;
 using RPGEconomy.Simulation.Engine;
 using RPGEconomy.Simulation.Services;
-using RPGEconomy.Domain.World;
 using WorldEntity = RPGEconomy.Domain.World.World;
 
 namespace RPGEconomy.Simulation.Tests;
@@ -29,22 +29,21 @@ public class SimulationEngineTests
         var result = await engine.ExecuteAsync(new SimulationExecutionRequest(1, 1, 1), TestContext.Current.CancellationToken);
 
         result.IsSuccess.Should().BeFalse();
+        result.Error.Should().NotBeNullOrEmpty();
     }
 
     [Fact]
-    public async Task ExecuteAsync_Should_Advance_World_And_Persist_Context()
+    public async Task ExecuteAsync_Should_Advance_World_And_Keep_Legacy_ZeroInput_Recipes_Free_Of_ProductionDemand()
     {
         var world = new WorldEntity(1, "World", "Desc", 3);
         var settlement = new Settlement(10, 1, "Town", 100);
-        var warehouse = new Warehouse(20, settlement.Id);
-        warehouse.AddItem(1, 4, QualityGrade.Normal);
         var market = new Market(30, settlement.Id);
         market.RegisterProduct(2, 10m);
-        var recipe = ProductionRecipe.Create("Bread", 1, [new RecipeIngredient(1, 2)], [new RecipeIngredient(2, 1)]);
+        var recipe = ProductionRecipe.Create("Bread", 1, [], [new RecipeIngredient(2, 1m)]).Value!;
         var engine = CreateEngine(
             new WorldRepositoryFake(world),
             new SettlementRepositoryFake(settlement),
-            new WarehouseRepositoryFake(warehouse),
+            new WarehouseRepositoryFake(new Warehouse(20, settlement.Id)),
             new MarketRepositoryFake(market),
             new PopulationGroupRepositoryFake(
                 PopulationGroup.Create(settlement.Id, "Peasants", 50, [(2, 0.1m)]).Value!),
@@ -59,10 +58,49 @@ public class SimulationEngineTests
         world.CurrentDay.Should().Be(5);
         result.Value.Result.Settlements.Should().ContainSingle();
         result.Value.Result.Settlements[0].Prices.Should().ContainSingle();
+
         var price = result.Value.Result.Settlements[0].Prices[0];
         price.ProductTypeId.Should().Be(2);
-        price.Supply.Should().Be(2m);
+        price.Supply.Should().Be(4m);
         price.Demand.Should().Be(5m);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_Should_Add_ProductionDemand_For_Missing_Inputs()
+    {
+        var world = new WorldEntity(1, "World", "Desc", 0);
+        var settlement = new Settlement(10, 1, "Town", 50);
+        var warehouse = new Warehouse(20, settlement.Id);
+        warehouse.AddItem(1, 3m, QualityGrade.Normal);
+
+        var market = new Market(30, settlement.Id);
+        market.RegisterProduct(1, 5m);
+        market.RegisterProduct(2, 10m);
+
+        var recipe = ProductionRecipe.Create(
+            "Bread",
+            1,
+            [new RecipeIngredient(1, 2m)],
+            [new RecipeIngredient(2, 1m)]).Value!;
+
+        var engine = CreateEngine(
+            new WorldRepositoryFake(world),
+            new SettlementRepositoryFake(settlement),
+            new WarehouseRepositoryFake(warehouse),
+            new MarketRepositoryFake(market),
+            new PopulationGroupRepositoryFake(
+                PopulationGroup.Create(settlement.Id, "Peasants", 50, [(2, 0.1m)]).Value!),
+            new BuildingRepositoryFake(new Building(40, "Bakery", settlement.Id, 100, 2, true)),
+            new RecipeRepositoryFake((100, recipe)));
+
+        var result = await engine.ExecuteAsync(new SimulationExecutionRequest(1, world.Id, 1), TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        var settlementResult = result.Value!.Result.Settlements.Single();
+
+        settlementResult.Prices.Should().Contain(x => x.ProductTypeId == 1 && x.Supply == 0m && x.Demand == 1m);
+        settlementResult.Prices.Should().Contain(x => x.ProductTypeId == 2 && x.Supply == 1.5m && x.Demand == 5m);
+        settlementResult.Warehouse.Should().ContainSingle(x => x.ProductTypeId == 2 && x.Quantity == 1.5m);
     }
 
     private static SimulationEngine CreateEngine(
@@ -92,8 +130,12 @@ public class SimulationEngineTests
             => _world = world;
 
         public Task<WorldEntity?> GetByIdAsync(int id) => Task.FromResult(_world?.Id == id ? _world : null);
-        public Task<IReadOnlyList<WorldEntity>> GetAllAsync() => Task.FromResult((IReadOnlyList<WorldEntity>)(_world is null ? [] : [_world]));
+
+        public Task<IReadOnlyList<WorldEntity>> GetAllAsync() =>
+            Task.FromResult((IReadOnlyList<WorldEntity>)(_world is null ? [] : [_world]));
+
         public Task<int> SaveAsync(WorldEntity entity) => Task.FromResult(entity.Id);
+
         public Task DeleteAsync(int id) => Task.CompletedTask;
     }
 
@@ -105,16 +147,18 @@ public class SimulationEngineTests
             => _settlements = settlements;
 
         public Task<Settlement?> GetByIdAsync(int id) => Task.FromResult(_settlements.FirstOrDefault(x => x.Id == id));
+
         public Task<IReadOnlyList<Settlement>> GetByWorldIdAsync(int worldId) =>
             Task.FromResult((IReadOnlyList<Settlement>)_settlements.Where(x => x.WorldId == worldId).ToList().AsReadOnly());
+
         public Task<int> SaveAsync(Settlement entity) => Task.FromResult(entity.Id);
+
         public Task DeleteAsync(int id) => Task.CompletedTask;
     }
 
     private sealed class WarehouseRepositoryFake : IWarehouseRepository
     {
         private readonly Dictionary<int, Warehouse> _items = [];
-        public int SaveCalls { get; private set; }
 
         public WarehouseRepositoryFake(params Warehouse[] items)
         {
@@ -123,19 +167,17 @@ public class SimulationEngineTests
         }
 
         public Task<Warehouse?> GetByIdAsync(int id) => Task.FromResult(_items.Values.FirstOrDefault(x => x.Id == id));
+
         public Task<Warehouse?> GetBySettlementIdAsync(int settlementId) => Task.FromResult(_items.GetValueOrDefault(settlementId));
-        public Task<int> SaveAsync(Warehouse entity)
-        {
-            SaveCalls++;
-            return Task.FromResult(entity.Id);
-        }
+
+        public Task<int> SaveAsync(Warehouse entity) => Task.FromResult(entity.Id);
+
         public Task DeleteAsync(int id) => Task.CompletedTask;
     }
 
     private sealed class MarketRepositoryFake : IMarketRepository
     {
         private readonly Dictionary<int, Market> _items = [];
-        public int SaveCalls { get; private set; }
 
         public MarketRepositoryFake(params Market[] items)
         {
@@ -144,12 +186,11 @@ public class SimulationEngineTests
         }
 
         public Task<Market?> GetByIdAsync(int id) => Task.FromResult(_items.Values.FirstOrDefault(x => x.Id == id));
+
         public Task<Market?> GetBySettlementIdAsync(int settlementId) => Task.FromResult(_items.GetValueOrDefault(settlementId));
-        public Task<int> SaveAsync(Market entity)
-        {
-            SaveCalls++;
-            return Task.FromResult(entity.Id);
-        }
+
+        public Task<int> SaveAsync(Market entity) => Task.FromResult(entity.Id);
+
         public Task DeleteAsync(int id) => Task.CompletedTask;
     }
 
@@ -161,9 +202,12 @@ public class SimulationEngineTests
             => _items = items;
 
         public Task<Building?> GetByIdAsync(int id) => Task.FromResult(_items.FirstOrDefault(x => x.Id == id));
+
         public Task<IReadOnlyList<Building>> GetBySettlementIdAsync(int settlementId) =>
             Task.FromResult((IReadOnlyList<Building>)_items.Where(x => x.SettlementId == settlementId).ToList().AsReadOnly());
+
         public Task<int> SaveAsync(Building entity) => Task.FromResult(entity.Id);
+
         public Task DeleteAsync(int id) => Task.CompletedTask;
     }
 
@@ -190,22 +234,25 @@ public class SimulationEngineTests
 
         public RecipeRepositoryFake(params (int Id, ProductionRecipe Recipe)[] items)
         {
-            foreach (var (Id, Recipe) in items)
+            foreach (var (id, recipe) in items)
             {
-                var stored = new ProductionRecipe(Id, Recipe.Name, Recipe.LaborDaysRequired);
+                var stored = new ProductionRecipe(id, recipe.Name, recipe.LaborDaysRequired);
                 stored.Update(
-                    Recipe.Name,
-                    Recipe.LaborDaysRequired,
-                    Recipe.Inputs.Select(i => new RecipeIngredient(i.ProductTypeId, i.Quantity)),
-                    Recipe.Outputs.Select(o => new RecipeIngredient(o.ProductTypeId, o.Quantity)));
-                _items[Id] = stored;
+                    recipe.Name,
+                    recipe.LaborDaysRequired,
+                    recipe.Inputs.Select(i => new RecipeIngredient(i.ProductTypeId, i.Quantity)),
+                    recipe.Outputs.Select(o => new RecipeIngredient(o.ProductTypeId, o.Quantity)));
+                _items[id] = stored;
             }
         }
 
         public Task<ProductionRecipe?> GetByIdAsync(int id) => Task.FromResult(_items.GetValueOrDefault(id));
+
         public Task<IReadOnlyList<ProductionRecipe>> GetAllAsync() =>
             Task.FromResult((IReadOnlyList<ProductionRecipe>)_items.Values.ToList().AsReadOnly());
+
         public Task<int> SaveAsync(ProductionRecipe entity) => Task.FromResult(entity.Id);
+
         public Task DeleteAsync(int id) => Task.CompletedTask;
     }
 }

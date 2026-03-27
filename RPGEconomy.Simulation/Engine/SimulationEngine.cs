@@ -53,7 +53,7 @@ public class SimulationEngine : ISimulationExecutor
 
         var world = await _worldRepo.GetByIdAsync(worldId);
         if (world is null)
-            return Result<SimulationExecutionResult>.Failure($"Мир с Id {worldId} не найден");
+            return Result<SimulationExecutionResult>.Failure($"World with Id {worldId} was not found");
 
         var daysBefore = world.CurrentDay;
 

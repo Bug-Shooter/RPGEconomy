@@ -25,10 +25,10 @@ public class ConsumptionProfileItem : Entity
         decimal amountPerPersonPerTick)
     {
         if (productTypeId <= 0)
-            return Result<ConsumptionProfileItem>.Failure("Идентификатор товара должен быть больше нуля");
+            return Result<ConsumptionProfileItem>.Failure("Product type id must be greater than zero");
 
         if (amountPerPersonPerTick < 0)
-            return Result<ConsumptionProfileItem>.Failure("Норма потребления не может быть отрицательной");
+            return Result<ConsumptionProfileItem>.Failure("Consumption amount cannot be negative");
 
         return Result<ConsumptionProfileItem>.Success(
             new ConsumptionProfileItem(0, populationGroupId, productTypeId, amountPerPersonPerTick));

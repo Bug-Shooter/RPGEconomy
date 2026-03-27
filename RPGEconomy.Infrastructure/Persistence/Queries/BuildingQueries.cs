@@ -12,6 +12,7 @@ internal static class BuildingQueries
         SELECT id, name, settlement_id AS "settlementId", recipe_id AS "recipeId", worker_count AS "workerCount", is_active AS "isActive"
         FROM buildings
         WHERE settlement_id = @SettlementId
+        ORDER BY id
         """;
 
     public const string Insert = """

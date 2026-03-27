@@ -83,7 +83,7 @@ public class AggregateRepositoryTests
             "Bread",
             1.5,
             [new RecipeIngredient(1, 2.5m)],
-            [new RecipeIngredient(2, 1.25m)]);
+            [new RecipeIngredient(2, 1.25m)]).Value!;
 
         var recipeId = await repository.SaveAsync(recipe);
         var stored = await repository.GetByIdAsync(recipeId);

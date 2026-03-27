@@ -40,7 +40,7 @@ Project references:
 
 ### Implemented domain scope
 
-The current codebase now implements an early **Stage 2** baseline:
+The current codebase now implements an early **Stage 3** baseline:
 
 - worlds and settlements
 - warehouses and inventory items
@@ -50,13 +50,17 @@ The current codebase now implements an early **Stage 2** baseline:
 - local markets with per-product prices, supply, and demand
 - synchronous simulation advancement with persisted simulation jobs
 - currencies and resource types as CRUD-capable foundational entities
+- resource-dependent production with production chains and production demand
 
-Important Stage 2 interpretation in this repository:
+Important Stage 3 interpretation in this repository:
 
-- buildings are the practical producer layer for local supply
-- population groups are the demand layer
-- the market still receives only aggregated `supply` / `demand`
+- buildings remain the practical producer layer
 - no separate `Producer` aggregate is introduced alongside buildings
+- settlement warehouse stock is the shared source of production inputs and the carrier of produced outputs
+- recipes keep the existing `Inputs` + `Outputs` shape instead of switching to a separate `InputRequirement` model
+- the market still receives only aggregated `supply` / `demand`
+- market demand is the sum of population consumption demand and production input demand
+- zero-input recipes remain allowed as legacy source recipes for foundational goods
 
 ### Request handling and API style
 
@@ -89,7 +93,7 @@ Money-related columns use `NUMERIC` in the database and `decimal` in code for:
 - product base price
 - currency exchange rate to base
 
-Stage 2 also moves **economic quantities** to `decimal` / `NUMERIC` for:
+Economic quantities also use `decimal` / `NUMERIC` for:
 
 - warehouse inventory quantity
 - recipe ingredient quantity
@@ -130,10 +134,20 @@ Current tick order:
 1. production tick
 2. settlement-economy aggregation tick
 
+The production tick currently:
+
+- computes labor-limited building capacity
+- limits actual output by available input resources in the settlement warehouse
+- allows partial production when inputs are insufficient
+- consumes inputs from the settlement warehouse
+- writes outputs back to the settlement warehouse
+- records aggregated production demand for missing inputs
+
 The settlement-economy tick currently derives:
 
 - supply from warehouse stock after building-based production
 - demand from `PopulationGroup` consumption profiles
+- additional demand from production-side missing inputs
 
 The market remains independent from why demand or supply changed. Buildings and population groups adapt into aggregate values before they reach the market.
 
@@ -143,7 +157,7 @@ Validation is distributed across layers:
 
 - controllers validate simple request-shape rules
 - application services validate orchestration-level inputs and references
-- domain objects enforce stateful invariants such as duplicate market products, non-positive initial price, duplicate consumption-profile items, and negative supply/demand
+- domain objects enforce stateful invariants such as duplicate market products, non-positive initial price, duplicate consumption-profile items, invalid recipe definitions, and negative supply/demand
 
 Expected business errors use `Result` / `Result<T>`.
 Unexpected failures are handled by API middleware.
@@ -182,4 +196,5 @@ These concepts are **not implemented today** unless they are explicitly present 
 - validation is still imperative rather than centralized
 - market product names are resolved at application/query time instead of being embedded in the market aggregate
 - integration tests require a live PostgreSQL environment
-- buildings currently serve as the producer abstraction for Stage 2, so a future richer producer model should adapt from them instead of bypassing the market boundary
+- buildings still serve as the producer abstraction, so richer producer behavior must continue adapting into warehouse and market boundaries instead of bypassing them
+- production chains are intentionally deterministic and simple: building order is stable, but there is no optimization or priority model yet

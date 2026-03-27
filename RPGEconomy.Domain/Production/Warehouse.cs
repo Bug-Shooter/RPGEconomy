@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Domain.Common;
+using RPGEconomy.Domain.Common;
 using RPGEconomy.Domain.Resources;
 
 namespace RPGEconomy.Domain.Production;
@@ -36,6 +36,8 @@ public class Warehouse : AggregateRoot
 
     public Result Withdraw(int productTypeId, decimal quantity, QualityGrade quality)
     {
+        if (quantity <= 0m) return Result.Failure("Количество должно быть больше нуля");
+
         var item = _items.FirstOrDefault(i =>
             i.ProductTypeId == productTypeId && i.Quality == quality.Name);
 
@@ -54,6 +56,11 @@ public class Warehouse : AggregateRoot
                 i.ProductTypeId == ing.ProductTypeId &&
                 i.Quality == QualityGrade.Normal.Name &&
                 i.Quantity >= ing.Quantity));
+
+    public decimal GetAvailableQuantity(int productTypeId, QualityGrade quality) =>
+        _items
+            .Where(i => i.ProductTypeId == productTypeId && i.Quality == quality.Name)
+            .Sum(i => i.Quantity);
 
     internal void LoadItems(IEnumerable<InventoryItem> items)
     {

@@ -7,15 +7,17 @@ namespace RPGEconomy.Simulation.Engine;
 
 public class SimulationContext
 {
+    private readonly Dictionary<int, Dictionary<int, decimal>> _productionDemandBySettlement = [];
+
     public int WorldId { get; }
     public int CurrentDay { get; }
 
     public IReadOnlyList<Settlement> Settlements { get; }
-    public IReadOnlyDictionary<int, Warehouse> Warehouses { get; }    // key: settlementId
-    public IReadOnlyDictionary<int, Market> Markets { get; }          // key: settlementId
-    public IReadOnlyDictionary<int, IReadOnlyList<PopulationGroup>> PopulationGroups { get; } // key: settlementId
-    public IReadOnlyDictionary<int, IReadOnlyList<Building>> Buildings { get; } // key: settlementId
-    public IReadOnlyDictionary<int, ProductionRecipe> Recipes { get; } // key: recipeId
+    public IReadOnlyDictionary<int, Warehouse> Warehouses { get; }
+    public IReadOnlyDictionary<int, Market> Markets { get; }
+    public IReadOnlyDictionary<int, IReadOnlyList<PopulationGroup>> PopulationGroups { get; }
+    public IReadOnlyDictionary<int, IReadOnlyList<Building>> Buildings { get; }
+    public IReadOnlyDictionary<int, ProductionRecipe> Recipes { get; }
 
     public SimulationContext(
         int worldId,
@@ -35,5 +37,29 @@ public class SimulationContext
         PopulationGroups = populationGroups;
         Buildings = buildings;
         Recipes = recipes;
+    }
+
+    public void ResetProductionDemand() => _productionDemandBySettlement.Clear();
+
+    public void AddProductionDemand(int settlementId, int productTypeId, decimal quantity)
+    {
+        if (quantity <= 0m)
+            return;
+
+        if (!_productionDemandBySettlement.TryGetValue(settlementId, out var demandByProduct))
+        {
+            demandByProduct = [];
+            _productionDemandBySettlement[settlementId] = demandByProduct;
+        }
+
+        demandByProduct[productTypeId] = demandByProduct.GetValueOrDefault(productTypeId, 0m) + quantity;
+    }
+
+    public IReadOnlyDictionary<int, decimal> GetProductionDemand(int settlementId) =>
+        _productionDemandBySettlement.GetValueOrDefault(settlementId) ?? EmptyDemand.Instance;
+
+    private sealed class EmptyDemand : Dictionary<int, decimal>
+    {
+        public static readonly EmptyDemand Instance = new();
     }
 }

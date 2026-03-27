@@ -26,7 +26,7 @@ public class PopulationGroupService : IPopulationGroupService
     {
         var settlement = await _settlementRepo.GetByIdAsync(settlementId);
         if (settlement is null)
-            return Result<IReadOnlyList<PopulationGroupDto>>.Failure($"Поселение с Id {settlementId} не найдено");
+            return Result<IReadOnlyList<PopulationGroupDto>>.Failure($"Settlement with Id {settlementId} was not found");
 
         var groups = await _populationGroupRepo.GetBySettlementIdAsync(settlementId);
         return Result<IReadOnlyList<PopulationGroupDto>>.Success(groups.Select(ToDto).ToList().AsReadOnly());
@@ -36,7 +36,7 @@ public class PopulationGroupService : IPopulationGroupService
     {
         var group = await _populationGroupRepo.GetByIdAsync(id);
         if (group is null)
-            return Result<PopulationGroupDto>.Failure($"Группа населения с Id {id} не найдена");
+            return Result<PopulationGroupDto>.Failure($"Population group with Id {id} was not found");
 
         return Result<PopulationGroupDto>.Success(ToDto(group));
     }
@@ -49,7 +49,7 @@ public class PopulationGroupService : IPopulationGroupService
     {
         var settlement = await _settlementRepo.GetByIdAsync(settlementId);
         if (settlement is null)
-            return Result<PopulationGroupDto>.Failure($"Поселение с Id {settlementId} не найдено");
+            return Result<PopulationGroupDto>.Failure($"Settlement with Id {settlementId} was not found");
 
         var validation = await ValidateProductTypesAsync(consumptionProfile);
         if (!validation.IsSuccess)
@@ -68,7 +68,7 @@ public class PopulationGroupService : IPopulationGroupService
         await SyncSettlementPopulationAsync(settlementId);
 
         var saved = await _populationGroupRepo.GetByIdAsync(id)
-            ?? throw new InvalidOperationException("Созданная группа населения не найдена");
+            ?? throw new InvalidOperationException("Created population group was not found");
 
         return Result<PopulationGroupDto>.Success(ToDto(saved));
     }
@@ -81,7 +81,7 @@ public class PopulationGroupService : IPopulationGroupService
     {
         var group = await _populationGroupRepo.GetByIdAsync(id);
         if (group is null)
-            return Result<PopulationGroupDto>.Failure($"Группа населения с Id {id} не найдена");
+            return Result<PopulationGroupDto>.Failure($"Population group with Id {id} was not found");
 
         var validation = await ValidateProductTypesAsync(consumptionProfile);
         if (!validation.IsSuccess)
@@ -105,7 +105,7 @@ public class PopulationGroupService : IPopulationGroupService
     {
         var group = await _populationGroupRepo.GetByIdAsync(id);
         if (group is null)
-            return Result.Failure($"Группа населения с Id {id} не найдена");
+            return Result.Failure($"Population group with Id {id} was not found");
 
         await _populationGroupRepo.DeleteAsync(id);
         await SyncSettlementPopulationAsync(group.SettlementId);
@@ -118,7 +118,7 @@ public class PopulationGroupService : IPopulationGroupService
         {
             var productType = await _productTypeRepo.GetByIdAsync(item.ProductTypeId);
             if (productType is null)
-                return Result.Failure($"Тип товара с Id {item.ProductTypeId} не найден");
+                return Result.Failure($"Product type with Id {item.ProductTypeId} was not found");
         }
 
         return Result.Success();
@@ -127,7 +127,7 @@ public class PopulationGroupService : IPopulationGroupService
     private async Task SyncSettlementPopulationAsync(int settlementId)
     {
         var settlement = await _settlementRepo.GetByIdAsync(settlementId)
-            ?? throw new InvalidOperationException("Поселение для синхронизации населения не найдено");
+            ?? throw new InvalidOperationException("Settlement for population sync was not found");
 
         var groups = await _populationGroupRepo.GetBySettlementIdAsync(settlementId);
         settlement.Update(settlement.Name, groups.Sum(group => group.PopulationSize));

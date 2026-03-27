@@ -22,6 +22,12 @@ public class SettlementEconomySimulationService
                 ? AggregateDemand(groups)
                 : new Dictionary<int, decimal>();
 
+            foreach (var productionDemand in ctx.GetProductionDemand(settlement.Id))
+            {
+                demandByProduct[productionDemand.Key] =
+                    demandByProduct.GetValueOrDefault(productionDemand.Key, 0m) + productionDemand.Value;
+            }
+
             foreach (var offer in market.Offers)
             {
                 var supply = supplyByProduct.GetValueOrDefault(offer.ProductTypeId, 0m);

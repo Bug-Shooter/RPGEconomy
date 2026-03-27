@@ -70,7 +70,7 @@ public class PopulationGroup : AggregateRoot
     {
         var items = consumptionProfile.ToList();
         if (items.GroupBy(item => item.ProductTypeId).Any(group => group.Count() > 1))
-            return Result.Failure("Профиль потребления не может содержать дублирующиеся товары");
+            return Result.Failure("Consumption profile cannot contain duplicate products");
 
         var mappedItems = new List<ConsumptionProfileItem>(items.Count);
         foreach (var item in items)
@@ -93,16 +93,16 @@ public class PopulationGroup : AggregateRoot
         IEnumerable<(int ProductTypeId, decimal AmountPerPersonPerTick)> consumptionProfile)
     {
         if (settlementId <= 0)
-            return Result.Failure("Идентификатор поселения должен быть больше нуля");
+            return Result.Failure("Settlement id must be greater than zero");
 
         if (string.IsNullOrWhiteSpace(name))
-            return Result.Failure("Название группы населения не может быть пустым");
+            return Result.Failure("Population group name cannot be empty");
 
         if (populationSize < 0)
-            return Result.Failure("Численность населения не может быть отрицательной");
+            return Result.Failure("Population size cannot be negative");
 
         if (consumptionProfile.Any(item => item.AmountPerPersonPerTick < 0))
-            return Result.Failure("Норма потребления не может быть отрицательной");
+            return Result.Failure("Consumption amount cannot be negative");
 
         return Result.Success();
     }
