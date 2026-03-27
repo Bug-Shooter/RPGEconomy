@@ -6,12 +6,12 @@ public class ProductType : AggregateRoot
 {
     public string Name { get; private set; }
     public string Description { get; private set; }
-    public double BasePrice { get; private set; }
+    public decimal BasePrice { get; private set; }
     public double WeightPerUnit { get; private set; }
 
     // Dapper
     public ProductType(int id, string name, string description,
-        double basePrice, double weightPerUnit) : base(id)
+        decimal basePrice, double weightPerUnit) : base(id)
     {
         Name = name;
         Description = description;
@@ -20,10 +20,10 @@ public class ProductType : AggregateRoot
     }
 
     public static ProductType Create(string name, string description,
-        double basePrice, double weightPerUnit)
+        decimal basePrice, double weightPerUnit)
         => new(0, name, description, basePrice, weightPerUnit);
 
-    public void Update(string name, string description, double basePrice, double weightPerUnit)
+    public void Update(string name, string description, decimal basePrice, double weightPerUnit)
     {
         Name = name;
         Description = description;

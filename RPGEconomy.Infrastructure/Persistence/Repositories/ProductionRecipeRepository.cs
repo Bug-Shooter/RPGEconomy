@@ -92,7 +92,7 @@ public class ProductionRecipeRepository : IProductionRecipeRepository
     private async Task LoadIngredientsAsync(IDbConnection conn, ProductionRecipe recipe)
     {
         // Читаем сырые данные из БД
-        var rows = await conn.QueryAsync<(int Id, int RecipeId, int ProductTypeId, int Quantity, bool IsInput)>(
+        var rows = await conn.QueryAsync<(int Id, int RecipeId, int ProductTypeId, decimal Quantity, bool IsInput)>(
             ProductionRecipeQueries.GetIngredients, new { RecipeId = recipe.Id });
 
         var inputs = rows.Where(r => r.IsInput)

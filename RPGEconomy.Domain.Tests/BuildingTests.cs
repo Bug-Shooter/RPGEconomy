@@ -46,4 +46,39 @@ public class BuildingTests
 
         result.Should().Be(expected);
     }
+
+    [Fact]
+    public void CalculatePlannedInputDemand_Should_Aggregate_Duplicate_Input_Product_Rows()
+    {
+        var building = new Building(1, "Mill", 1, 1, 2, true);
+        var recipe = CreatePersistedRecipe(
+            10,
+            "Flour",
+            1,
+            [new RecipeIngredient(1, 2m), new RecipeIngredient(1, 3m), new RecipeIngredient(2, 1m)],
+            [new RecipeIngredient(3, 1m)]);
+
+        var demand = building.CalculatePlannedInputDemand(recipe);
+
+        demand.Should().BeEquivalentTo(new Dictionary<int, decimal>
+        {
+            [1] = 10m,
+            [2] = 2m
+        });
+    }
+
+    private static ProductionRecipe CreatePersistedRecipe(
+        int id,
+        string name,
+        double laborDaysRequired,
+        IReadOnlyList<RecipeIngredient> inputs,
+        IReadOnlyList<RecipeIngredient> outputs)
+    {
+        var recipe = new ProductionRecipe(id, name, laborDaysRequired);
+        var loadIngredients = typeof(ProductionRecipe).GetMethod("LoadIngredients", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        loadIngredients.Should().NotBeNull();
+
+        loadIngredients!.Invoke(recipe, [inputs, outputs]);
+        return recipe;
+    }
 }

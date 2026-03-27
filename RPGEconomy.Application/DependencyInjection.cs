@@ -16,6 +16,8 @@ public static class DependencyInjection
         services.AddScoped<IWorldService, WorldService>();
         services.AddScoped<ISettlementService, SettlementService>();
         services.AddScoped<IMarketService, MarketService>();
+        services.AddScoped<IPopulationGroupService, PopulationGroupService>();
+        services.AddScoped<IEconomicEventService, EconomicEventService>();
         services.AddScoped<ISimulationService, SimulationService>();
 
         return services;

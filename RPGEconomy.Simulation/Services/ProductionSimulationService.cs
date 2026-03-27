@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Domain.Production;
+using RPGEconomy.Domain.Production;
 using RPGEconomy.Domain.Resources;
 using RPGEconomy.Simulation.Engine;
 
@@ -6,41 +6,113 @@ namespace RPGEconomy.Simulation.Services;
 
 public class ProductionSimulationService
 {
-    // Обрабатывает производство для всех поселений за один тик
     public void RunTick(SimulationContext ctx)
     {
+        ctx.ResetProductionDemand();
+
         foreach (var settlement in ctx.Settlements)
         {
             if (!ctx.Warehouses.TryGetValue(settlement.Id, out var warehouse)) continue;
             if (!ctx.Buildings.TryGetValue(settlement.Id, out var buildings)) continue;
 
-            foreach (var building in buildings.Where(b => b.IsActive))
+            foreach (var building in buildings.Where(b => b.IsActive).OrderBy(b => b.Id))
             {
                 if (!ctx.Recipes.TryGetValue(building.RecipeId, out var recipe)) continue;
 
-                // Сколько партий здание может произвести за день
-                var batches = building.BatchesPerDay(recipe.LaborDaysRequired);
-                if (batches <= 0) continue;
+                var plannedBatches = building.BatchesPerDay(recipe.LaborDaysRequired);
+                if (plannedBatches <= 0) continue;
 
-                // Масштабируем ингредиенты под количество партий
-                var scaledInputs = recipe.Inputs
-                    .Select(i => new RecipeIngredient(i.ProductTypeId, i.Quantity * batches))
-                    .ToList();
+                var normalizedInputs = NormalizeInputs(recipe);
+                var plannedBatchCount = (decimal)plannedBatches;
+                var actualBatchCount = CalculateActualBatchCount(building, warehouse, normalizedInputs, plannedBatchCount);
 
-                // Проверяем что склад может выдать все входные ресурсы
-                if (!warehouse.CanFulfill(scaledInputs)) continue;
+                AddProductionDemand(ctx, settlement.Id, building, warehouse, normalizedInputs, plannedBatchCount);
 
-                // Списываем входные ресурсы
-                foreach (var input in scaledInputs)
-                    warehouse.Withdraw(input.ProductTypeId, input.Quantity, QualityGrade.Normal);
+                if (actualBatchCount <= 0m) continue;
 
-                // Добавляем выходные товары
+                foreach (var input in normalizedInputs)
+                {
+                    var requiredQuantity = input.Quantity * actualBatchCount;
+                    var reserveQuantity = decimal.Min(building.GetInputReserveQuantity(input.ProductTypeId), requiredQuantity);
+                    if (reserveQuantity > 0m)
+                    {
+                        var reserveWithdrawal = building.ConsumeInputReserve(input.ProductTypeId, reserveQuantity);
+                        if (!reserveWithdrawal.IsSuccess)
+                            throw new InvalidOperationException(reserveWithdrawal.Error);
+                    }
+
+                    var warehouseQuantity = requiredQuantity - reserveQuantity;
+                    if (warehouseQuantity > 0m)
+                    {
+                        var warehouseWithdrawal = warehouse.Withdraw(input.ProductTypeId, warehouseQuantity, QualityGrade.Normal);
+                        if (!warehouseWithdrawal.IsSuccess)
+                            throw new InvalidOperationException(warehouseWithdrawal.Error);
+                    }
+                }
+
                 foreach (var output in recipe.Outputs)
-                    warehouse.AddItem(
+                {
+                    var addResult = warehouse.AddItem(
                         output.ProductTypeId,
-                        output.Quantity * batches,
+                        output.Quantity * actualBatchCount,
                         QualityGrade.Normal);
+
+                    if (!addResult.IsSuccess)
+                        throw new InvalidOperationException(addResult.Error);
+                }
             }
         }
     }
+
+    private static decimal CalculateActualBatchCount(
+        Building building,
+        Warehouse warehouse,
+        IReadOnlyList<RecipeIngredient> inputs,
+        decimal plannedBatchCount)
+    {
+        if (inputs.Count == 0)
+            return plannedBatchCount;
+
+        var actualBatchCount = plannedBatchCount;
+        foreach (var input in inputs)
+        {
+            var availableQuantity =
+                building.GetInputReserveQuantity(input.ProductTypeId) +
+                warehouse.GetAvailableQuantity(input.ProductTypeId, QualityGrade.Normal);
+            var inputLimitedBatchCount = availableQuantity / input.Quantity;
+            actualBatchCount = decimal.Min(actualBatchCount, inputLimitedBatchCount);
+        }
+
+        return decimal.Max(actualBatchCount, 0m);
+    }
+
+    private static void AddProductionDemand(
+        SimulationContext ctx,
+        int settlementId,
+        Building building,
+        Warehouse warehouse,
+        IReadOnlyList<RecipeIngredient> inputs,
+        decimal plannedBatchCount)
+    {
+        if (inputs.Count == 0)
+            return;
+
+        foreach (var input in inputs)
+        {
+            var requiredQuantity = input.Quantity * plannedBatchCount;
+            var availableQuantity =
+                building.GetInputReserveQuantity(input.ProductTypeId) +
+                warehouse.GetAvailableQuantity(input.ProductTypeId, QualityGrade.Normal);
+            var missingQuantity = decimal.Max(requiredQuantity - availableQuantity, 0m);
+
+            ctx.AddProductionDemand(settlementId, input.ProductTypeId, missingQuantity);
+        }
+    }
+
+    private static IReadOnlyList<RecipeIngredient> NormalizeInputs(ProductionRecipe recipe) =>
+        recipe.Inputs
+            .Where(input => input.Quantity > 0m)
+            .GroupBy(input => input.ProductTypeId)
+            .Select(group => new RecipeIngredient(group.Key, group.Sum(input => input.Quantity)))
+            .ToArray();
 }

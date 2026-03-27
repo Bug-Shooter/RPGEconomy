@@ -4,5 +4,5 @@ public record ProductTypeDto(
     int Id,
     string Name,
     string Description,
-    double BasePrice,
+    decimal BasePrice,
     double WeightPerUnit);

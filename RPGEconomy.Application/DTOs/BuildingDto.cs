@@ -6,4 +6,6 @@ public record BuildingDto(
     int SettlementId,
     int RecipeId,
     int WorkerCount,
-    bool IsActive);
+    bool IsActive,
+    decimal InputReserveCoverageTicks,
+    IReadOnlyList<ReserveStockItemDto> InputReserveStock);

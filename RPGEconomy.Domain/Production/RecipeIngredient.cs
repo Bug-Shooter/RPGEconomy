@@ -2,9 +2,9 @@
 public class RecipeIngredient
 {
     public int ProductTypeId { get; }
-    public int Quantity { get; }
+    public decimal Quantity { get; }
 
-    public RecipeIngredient(int productTypeId, int quantity)
+    public RecipeIngredient(int productTypeId, decimal quantity)
     {
         ProductTypeId = productTypeId;
         Quantity = quantity;
