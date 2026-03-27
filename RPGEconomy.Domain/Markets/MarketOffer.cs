@@ -6,13 +6,13 @@ public class MarketOffer : Entity
 {
     public int MarketId { get; private set; }
     public int ProductTypeId { get; private set; }
-    public double CurrentPrice { get; private set; }
+    public decimal CurrentPrice { get; private set; }
     public int SupplyVolume { get; private set; }
     public int DemandVolume { get; private set; }
 
     // Dapper
     public MarketOffer(int id, int marketId, int productTypeId,
-        double currentPrice, int supplyVolume, int demandVolume) : base(id)
+        decimal currentPrice, int supplyVolume, int demandVolume) : base(id)
     {
         MarketId = marketId;
         ProductTypeId = productTypeId;
@@ -21,25 +21,26 @@ public class MarketOffer : Entity
         DemandVolume = demandVolume;
     }
 
-    public static MarketOffer Create(int marketId, int productTypeId, double initialPrice)
-        => new(0, marketId, productTypeId, initialPrice, 0, 0);
-
-    internal void UpdateVolumes(int supply, int demand)
+    public static Result<MarketOffer> Create(int marketId, int productTypeId, decimal initialPrice)
     {
-        SupplyVolume = supply;
-        DemandVolume = demand;
+        if (initialPrice <= 0)
+            return Result<MarketOffer>.Failure("Начальная цена должна быть больше нуля");
+
+        return Result<MarketOffer>.Success(
+            new MarketOffer(0, marketId, productTypeId, initialPrice, 0, 0));
     }
 
-    internal void RecalculatePrice(double sensitivity = 0.1f)
+    internal Result UpdateState(int supply, int demand)
     {
-        if (SupplyVolume <= 0 && DemandVolume > 0)
-        {
-            CurrentPrice *= 1 + sensitivity;
-            return;
-        }
+        if (supply < 0)
+            return Result.Failure("Предложение не может быть отрицательным");
 
-        double ratio = (double)DemandVolume / Math.Max(SupplyVolume, 1);
-        CurrentPrice *= 1 + sensitivity * (ratio - 1);
-        CurrentPrice = Math.Max(CurrentPrice, 0.01f);
+        if (demand < 0)
+            return Result.Failure("Спрос не может быть отрицательным");
+
+        SupplyVolume = supply;
+        DemandVolume = demand;
+        CurrentPrice = MarketPricePolicy.Recalculate(CurrentPrice, SupplyVolume, DemandVolume);
+        return Result.Success();
     }
 }

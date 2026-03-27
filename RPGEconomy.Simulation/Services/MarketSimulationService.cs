@@ -4,6 +4,11 @@ namespace RPGEconomy.Simulation.Services;
 
 public class MarketSimulationService
 {
+    private readonly PopulationMarketDemandProvider _demandProvider;
+
+    public MarketSimulationService(PopulationMarketDemandProvider demandProvider)
+        => _demandProvider = demandProvider;
+
     // Обновляет цены на рынке на основе остатков склада
     public void RunTick(SimulationContext ctx)
     {
@@ -21,15 +26,10 @@ public class MarketSimulationService
 
                 // Спрос = упрощённо: базовый спрос пропорционален населению
                 // В V2 изменить на реальный спрос из ConsumptionProfile
-                var demand = CalculateBaseDemand(settlement.Population, offer.ProductTypeId);
+                var demand = _demandProvider.GetDemand(settlement, offer.ProductTypeId);
 
-                market.UpdateMarket(offer.ProductTypeId, supply, demand);
+                market.UpdateProductState(offer.ProductTypeId, supply, demand);
             }
         }
     }
-
-    // Заглушка для MVP — фиксированный спрос на единицу населения
-    // Позже будет заменено на ConsumptionProfile
-    private int CalculateBaseDemand(int population, int productTypeId)
-        => (int)Math.Ceiling(population * 0.01f);
 }

@@ -68,7 +68,7 @@ public sealed class TestDataSeeder
     public Task<int> AddMarketOfferAsync(
         int marketId,
         int productTypeId,
-        double currentPrice,
+        decimal currentPrice,
         int supplyVolume = 0,
         int demandVolume = 0) =>
         _connection.ExecuteScalarAsync<int>(
@@ -82,7 +82,7 @@ public sealed class TestDataSeeder
     public Task<int> CreateProductTypeAsync(
         string name = "Product",
         string description = "Description",
-        double basePrice = 10,
+        decimal basePrice = 10,
         double weightPerUnit = 1) =>
         _connection.ExecuteScalarAsync<int>(
             """

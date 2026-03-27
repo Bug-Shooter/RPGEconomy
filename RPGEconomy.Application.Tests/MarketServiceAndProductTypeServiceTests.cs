@@ -13,22 +13,52 @@ public class MarketServiceAndProductTypeServiceTests
     {
         var market = Market.Create(1);
         var marketRepo = new MarketRepositoryFake(market);
-        var productRepo = new ProductTypeRepositoryFake(new ProductType(1, "Bread", "Desc", 10, 1));
+        var productRepo = new ProductTypeRepositoryFake(new ProductType(1, "Bread", "Desc", 10m, 1));
         var service = new MarketService(marketRepo, productRepo);
 
-        var result = await service.RegisterProductAsync(1, 1, 12);
+        var result = await service.RegisterProductAsync(1, 1, 12m);
 
         result.IsSuccess.Should().BeTrue();
         marketRepo.Stored.Offers.Should().ContainSingle(x => x.ProductTypeId == 1);
     }
 
     [Fact]
+    public async Task GetProductAsync_Should_Return_NotFound_When_Product_Is_Not_Registered()
+    {
+        var marketRepo = new MarketRepositoryFake(Market.Create(1));
+        var productRepo = new ProductTypeRepositoryFake();
+        var service = new MarketService(marketRepo, productRepo);
+
+        var result = await service.GetProductAsync(1, 42);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("не найден");
+    }
+
+    [Fact]
+    public async Task UpdateProductStateAsync_Should_Update_Supply_Demand_And_Return_Dto()
+    {
+        var market = Market.Create(1);
+        market.RegisterProduct(1, 12m);
+        var marketRepo = new MarketRepositoryFake(market);
+        var productRepo = new ProductTypeRepositoryFake(new ProductType(1, "Bread", "Desc", 10m, 1));
+        var service = new MarketService(marketRepo, productRepo);
+
+        var result = await service.UpdateProductStateAsync(1, 1, 5, 9);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Supply.Should().Be(5);
+        result.Value.Demand.Should().Be(9);
+        result.Value.ProductName.Should().Be("Bread");
+    }
+
+    [Fact]
     public async Task UpdateAsync_Should_Validate_Name_And_BasePrice_For_ProductType()
     {
-        var repo = new ProductTypeRepositoryFake(new ProductType(1, "Bread", "Desc", 10, 1));
+        var repo = new ProductTypeRepositoryFake(new ProductType(1, "Bread", "Desc", 10m, 1));
         var service = new ProductTypeService(repo);
 
-        var result = await service.UpdateAsync(1, "", "Desc", 0, 1);
+        var result = await service.UpdateAsync(1, "", "Desc", 0m, 1);
 
         result.IsSuccess.Should().BeFalse();
     }

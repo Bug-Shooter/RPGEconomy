@@ -37,7 +37,7 @@ public class SimulationEngineTests
         var warehouse = new Warehouse(20, settlement.Id);
         warehouse.AddItem(1, 4, QualityGrade.Normal);
         var market = new Market(30, settlement.Id);
-        market.RegisterProduct(2, 10);
+        market.RegisterProduct(2, 10m);
         var recipe = ProductionRecipe.Create("Bread", 1, [new RecipeIngredient(1, 2)], [new RecipeIngredient(2, 1)]);
         var engine = CreateEngine(
             new WorldRepositoryFake(world),
@@ -71,7 +71,7 @@ public class SimulationEngineTests
             buildings,
             recipes,
             new ProductionSimulationService(),
-            new MarketSimulationService());
+            new MarketSimulationService(new PopulationMarketDemandProvider()));
 
     private sealed class WorldRepositoryFake : IWorldRepository
     {

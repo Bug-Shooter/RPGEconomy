@@ -58,16 +58,17 @@ public class AggregateRepositoryTests
         var repository = new MarketRepository(new NpgsqlConnectionFactory(PostgresTestDatabase.ConnectionString));
         var marketId = await repository.SaveAsync(Market.Create(settlementId));
         var market = await repository.GetByIdAsync(marketId);
-        market!.RegisterProduct(1, 10);
+        market!.RegisterProduct(1, 10m);
         await repository.SaveAsync(market);
 
         market = await repository.GetByIdAsync(marketId);
-        market!.UpdateMarket(1, 2, 5);
-        market.RegisterProduct(2, 15);
+        market!.UpdateProductState(1, 2, 5);
+        market.RegisterProduct(2, 15m);
         await repository.SaveAsync(market);
 
         var reloaded = await repository.GetByIdAsync(marketId);
         reloaded!.Offers.Should().HaveCount(2);
+        reloaded.Offers.Should().Contain(x => x.ProductTypeId == 1 && x.CurrentPrice > 10m);
         var offerCount = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM market_offers WHERE market_id = @marketId", new { marketId });
         offerCount.Should().Be(2);
     }

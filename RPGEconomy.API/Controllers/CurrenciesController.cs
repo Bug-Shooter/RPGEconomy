@@ -59,4 +59,4 @@ public class CurrenciesController : ControllerBase
     }
 }
 
-public record CreateCurrencyRequest(string Name, string Code, double ExchangeRateToBase);
+public record CreateCurrencyRequest(string Name, string Code, decimal ExchangeRateToBase);

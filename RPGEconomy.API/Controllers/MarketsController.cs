@@ -20,6 +20,13 @@ public class MarketsController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : NotFound(result.Error);
     }
 
+    [HttpGet("products/{productTypeId}")]
+    public async Task<IActionResult> GetProduct(int settlementId, int productTypeId)
+    {
+        var result = await _marketService.GetProductAsync(settlementId, productTypeId);
+        return this.ToActionResult(result);
+    }
+
     //// GET api/<MarketsController>/5
     //[HttpGet("{id}")]
     //public string Get(int id)
@@ -36,7 +43,19 @@ public class MarketsController : ControllerBase
         var result = await _marketService.RegisterProductAsync(
             settlementId, request.ProductTypeId, request.InitialPrice);
 
-        return result.IsSuccess ? Ok() : BadRequest(result.Error);
+        return this.ToActionResult(result);
+    }
+
+    [HttpPut("products/{productTypeId}")]
+    public async Task<IActionResult> UpdateProductState(
+        int settlementId,
+        int productTypeId,
+        [FromBody] UpdateMarketProductRequest request)
+    {
+        var result = await _marketService.UpdateProductStateAsync(
+            settlementId, productTypeId, request.Supply, request.Demand);
+
+        return this.ToActionResult(result);
     }
 
     //// PUT api/<MarketsController>/5
@@ -52,4 +71,27 @@ public class MarketsController : ControllerBase
     //}
 }
 
-public record RegisterProductRequest(int ProductTypeId, double InitialPrice);
+public record RegisterProductRequest(int ProductTypeId, decimal InitialPrice);
+public record UpdateMarketProductRequest(int Supply, int Demand);
+
+static class MarketsControllerResultExtensions
+{
+    public static IActionResult ToActionResult(this ControllerBase controller, RPGEconomy.Domain.Common.Result result)
+    {
+        if (result.IsSuccess)
+            return controller.Ok();
+
+        return IsNotFound(result.Error) ? controller.NotFound(result.Error) : controller.BadRequest(result.Error);
+    }
+
+    public static IActionResult ToActionResult<T>(this ControllerBase controller, RPGEconomy.Domain.Common.Result<T> result)
+    {
+        if (result.IsSuccess)
+            return controller.Ok(result.Value);
+
+        return IsNotFound(result.Error) ? controller.NotFound(result.Error) : controller.BadRequest(result.Error);
+    }
+
+    private static bool IsNotFound(string? error) =>
+        !string.IsNullOrWhiteSpace(error) && error.Contains("не найден", StringComparison.OrdinalIgnoreCase);
+}

@@ -29,7 +29,7 @@ public class CurrencyService : ICurrencyService
     }
 
     public async Task<Result<CurrencyDto>> CreateAsync(
-        string name, string code, double exchangeRateToBase)
+        string name, string code, decimal exchangeRateToBase)
     {
         if (string.IsNullOrWhiteSpace(name))
             return Result<CurrencyDto>.Failure("Название валюты не может быть пустым");
@@ -46,7 +46,7 @@ public class CurrencyService : ICurrencyService
     }
 
     public async Task<Result<CurrencyDto>> UpdateAsync(
-        int id, string name, string code, double exchangeRateToBase)
+        int id, string name, string code, decimal exchangeRateToBase)
     {
         if (string.IsNullOrWhiteSpace(name))
             return Result<CurrencyDto>.Failure("Название валюты не может быть пустым");

@@ -1,10 +1,12 @@
 # Architecture
 
-This document describes the architecture that exists in the codebase today. It reflects the current implementation and naming as found in the solution.
+This document describes the architecture implemented in the repository today. It separates current implementation from future-facing product vision so roadmap documents do not get mistaken for the current code shape.
 
-## Solution shape
+## Implemented now
 
-The solution contains five production projects:
+### Solution shape
+
+Production projects:
 
 - `RPGEconomy.API`
 - `RPGEconomy.Application`
@@ -12,7 +14,7 @@ The solution contains five production projects:
 - `RPGEconomy.Infrastructure`
 - `RPGEconomy.Simulation`
 
-It also contains six test-support and test-execution projects:
+Test and test-support projects:
 
 - `RPGEconomy.API.IntegrationTests`
 - `RPGEconomy.Application.Tests`
@@ -21,307 +23,153 @@ It also contains six test-support and test-execution projects:
 - `RPGEconomy.Simulation.Tests`
 - `RPGEconomy.Testing`
 
-The current project reference directions are:
+Project references:
 
-- `RPGEconomy.API` -> `RPGEconomy.Application`
-- `RPGEconomy.API` -> `RPGEconomy.Infrastructure`
-- `RPGEconomy.API` -> `RPGEconomy.Simulation`
+- `RPGEconomy.API` -> `RPGEconomy.Application`, `RPGEconomy.Infrastructure`, `RPGEconomy.Simulation`
 - `RPGEconomy.Application` -> `RPGEconomy.Domain`
-- `RPGEconomy.Infrastructure` -> `RPGEconomy.Application`
-- `RPGEconomy.Infrastructure` -> `RPGEconomy.Domain`
-- `RPGEconomy.Simulation` -> `RPGEconomy.Application`
-- `RPGEconomy.Simulation` -> `RPGEconomy.Domain`
+- `RPGEconomy.Infrastructure` -> `RPGEconomy.Application`, `RPGEconomy.Domain`
+- `RPGEconomy.Simulation` -> `RPGEconomy.Application`, `RPGEconomy.Domain`
 
-In practice, this forms a layered structure with runtime composition concentrated in `RPGEconomy.API`.
+### Runtime responsibilities
 
-## Project boundaries
+- `RPGEconomy.API` is the HTTP entry point with thin controller-based endpoints and middleware.
+- `RPGEconomy.Application` owns use-case orchestration, DTOs, repository abstractions, and simulation job lifecycle orchestration.
+- `RPGEconomy.Domain` owns entities, shared `Result` / `Result<T>`, market pricing rules, and core invariants.
+- `RPGEconomy.Infrastructure` owns Dapper repositories, SQL queries, migrations, database connection management, and simulation executor decorators.
+- `RPGEconomy.Simulation` owns the in-memory tick engine and simulation-side demand/production services.
 
-### `RPGEconomy.API`
+### Implemented domain scope
 
-`RPGEconomy.API` is the HTTP entry point. It contains:
+The current codebase is broader than the original local-market-only draft. It already includes:
 
-- `Program.cs`
-- MVC API controllers
-- custom middleware for request logging and exception handling
+- worlds and settlements
+- warehouses and inventory items
+- product types
+- production recipes and buildings
+- local markets with per-product prices, supply, and demand
+- synchronous simulation advancement with persisted simulation jobs
+- currencies and resource types as CRUD-capable foundational entities
 
-The API project does not contain business logic or persistence code. Controllers depend on application service interfaces such as `IWorldService`, `ISettlementService`, and `ISimulationService`.
+The current milestone should be understood as **Stage 1.5**:
 
-Request models are defined as small `record` types next to controllers rather than in a separate contracts assembly.
+- local market remains the central completed capability
+- minimal supply-side simulation already exists
+- warehouse, recipes, and buildings are accepted as foundation rather than treated as out-of-scope accidents
 
-### `RPGEconomy.Application`
+### Request handling and API style
 
-`RPGEconomy.Application` contains:
+- ASP.NET Core MVC controllers with attribute routing
+- thin controllers that call one application service and map `Result`
+- request models as local `record` types next to controllers
+- no MediatR, FluentValidation pipeline, Minimal APIs, or centralized validation layer
 
-- repository abstractions
-- service abstractions
-- simulation execution contracts
-- DTOs returned to the API layer
-- concrete application services
-
-The service classes orchestrate use cases. They call repositories, perform validation checks, construct DTOs, manage simulation job lifecycle, and return `Result` / `Result<T>` instead of throwing for normal business failures.
-
-This project is not purely abstractions: interfaces and concrete service implementations live together.
-
-### `RPGEconomy.Domain`
-
-`RPGEconomy.Domain` contains the domain model and shared primitives:
-
-- entities and aggregate roots
-- value-like enums such as `QualityGrade`
-- simulation job state and lifecycle
-- the shared `Result` / `Result<T>` type
-
-Domain objects expose methods such as `Update`, `AdvanceDays`, `AddItem`, `Withdraw`, and `UpdateMarket`. Some invariants are enforced here by returning `Result.Failure(...)`.
-
-The domain model also exposes constructors that are used by Dapper materialization.
-
-### `RPGEconomy.Infrastructure`
-
-`RPGEconomy.Infrastructure` contains persistence and technical cross-cutting concerns:
-
-- repository implementations
-- SQL query classes
-- database connection factory
-- database migrations
-- decorators around `ISimulationExecutor`
-
-This project registers repository implementations and provides technical decorators that are composed by the API project.
-
-### `RPGEconomy.Simulation`
-
-`RPGEconomy.Simulation` contains the simulation runtime:
-
-- `SimulationEngine`
-- simulation context and clock
-- internal simulation services for production and market updates
-- local executor DI registration
-
-This project implements the `ISimulationExecutor` abstraction from `RPGEconomy.Application` and operates by loading state through repository interfaces, mutating in-memory domain objects, and persisting selected aggregates back through repositories.
-
-## Dependency directions
-
-The dependency flow in code is:
-
-1. HTTP requests enter controllers in `RPGEconomy.API`.
-2. Controllers call service interfaces from `RPGEconomy.Application`.
-3. `SimulationService` in `RPGEconomy.Application` creates and updates `SimulationJob` records, then delegates execution through `ISimulationExecutor`.
-4. Application services use repository interfaces from `RPGEconomy.Application`.
-5. Repository implementations in `RPGEconomy.Infrastructure` talk to PostgreSQL through Dapper.
-6. Domain entities from `RPGEconomy.Domain` are shared across application, infrastructure, and simulation code.
-7. `RPGEconomy.Simulation` depends on application repository abstractions and domain entities.
-8. `RPGEconomy.API` composes application services, infrastructure repositories, local simulation execution, and execution decorators.
-
-This means the runtime composition is owned by the API project, while infrastructure stays focused on persistence and technical adapters.
-
-## Conceptual Model
-
-The system represents a time-driven economic simulation.
-
-Core concepts:
-- World
-- Settlement
-- Economy
-- Market
-- Production chains
-- Simulation ticks
-
-The simulation is the central domain process that evolves the system state over time.
-
-
-## Request handling style
-
-The HTTP layer uses ASP.NET Core controllers with attribute routing:
-
-- `[ApiController]`
-- `[Route(...)]`
-- action methods returning `Task<IActionResult>`
-
-The API is controller-based, not Minimal API based.
-
-Controllers are thin. Their usual pattern is:
-
-1. Accept route parameters and a `[FromBody]` request record.
-2. Call one application service method.
-3. Translate `Result` into `Ok`, `CreatedAtAction`, `BadRequest`, `NotFound`, or `NoContent`.
-
-Routes are organized around resource hierarchies, for example:
+Important routes currently include:
 
 - `/api/worlds`
 - `/api/worlds/{worldId}/settlements`
+- `/api/settlements/{settlementId}/buildings`
+- `/api/settlements/{settlementId}/market/prices`
+- `/api/settlements/{settlementId}/market/products`
+- `/api/settlements/{settlementId}/market/products/{productTypeId}`
 - `/api/worlds/{worldId}/simulation/advance`
 
-The current code does not use MediatR, command handlers, query handlers, or endpoint-specific request pipelines. Controllers call services directly.
+### Persistence and data model
 
-The simulation HTTP endpoint still behaves synchronously, but it now goes through an application service that tracks an internal simulation job lifecycle before returning the result.
+- PostgreSQL with `Npgsql`
+- Dapper repositories with handwritten SQL query classes
+- DbUp-based startup migrations
+- aggregate-style persistence for warehouses and markets via explicit child-row replacement
 
-## Persistence approach
+Money-related columns use `NUMERIC` in the database and `decimal` in code for:
 
-Persistence is implemented in `RPGEconomy.Infrastructure` using:
+- market offer price
+- product base price
+- currency exchange rate to base
 
-- PostgreSQL via `Npgsql`
-- Dapper for data access
-- DbUp for migrations
+Non-money continuous values still use `double` where appropriate, including:
 
-The current persistence pattern is repository-based:
+- `weight_per_unit`
+- `labor_days_required`
+- `regeneration_rate_per_day`
 
-- application defines repository interfaces such as `IWorldRepository`
-- infrastructure implements them in classes such as `WorldRepository`
-- simulation jobs follow the same repository pattern through `ISimulationJobRepository`
+### Market model
 
-Each repository method creates and opens a database connection through `IDbConnectionFactory`.
+The market is intentionally modeled as an **aggregator of local state**, not an order book:
 
-SQL is written manually and stored in static query classes such as `WorldQueries`, `SettlementQueries`, and `MarketQueries`. Repositories call Dapper APIs such as:
+- each market belongs to one settlement
+- each product appears at most once per market
+- market state is stored as current price, supply volume, and demand volume
+- the market accepts aggregated `supply` / `demand` inputs
+- price recalculation is deterministic and isolated in domain logic
 
-- `QueryFirstOrDefaultAsync`
-- `QueryAsync`
-- `ExecuteAsync`
-- `ExecuteScalarAsync`
+Current market price behavior:
 
-There is no EF Core `DbContext` in the current code.
+- price rises when `demand > supply`
+- price falls when `supply > demand`
+- price rises when `supply = 0` and `demand > 0`
+- price stays stable when both are zero
+- price is clamped to a minimum floor and to a bounded per-tick change
 
-For aggregate-like objects with child collections, repositories persist the root and then replace child rows explicitly. Examples include markets and warehouses, where offers/items are deleted and re-inserted during save operations.
+### Simulation flow
 
-Database migrations run during application startup. Connection string resolution is centralized around the shared ASP.NET Core configuration:
+The simulation runtime loads settlements and related aggregates once, runs ticks in memory, and persists selected aggregates after execution.
 
-- `RPGEconomy.Infrastructure` resolves `ConnectionStrings:DefaultConnection` from `IConfiguration` when constructing `IDbConnectionFactory`
-- `Program.cs` calls `RunDatabaseMigrations()` on the application configuration, and that extension resolves the same configured connection string before invoking `MigrationRunner`
+Current tick order:
 
-The runner:
+1. production tick
+2. market tick
 
-- ensures the PostgreSQL database exists
-- runs embedded SQL scripts with DbUp
+The market tick currently derives:
 
-The schema also contains a `simulation_jobs` table used to persist the internal job lifecycle for simulation execution.
+- supply from warehouse stock
+- demand from a simulation-side population-based stub provider
 
-## Validation
+This keeps the market aggregate independent from the origin of demand while leaving room for future producer/population models.
 
-Validation is primarily imperative and distributed across controllers, application services, and some domain methods.
+### Validation and error handling
 
-Current patterns include:
+Validation is distributed across layers:
 
-- direct `if` checks in controllers for simple request rules
-- direct `if` checks in application services for required fields and numeric ranges
-- domain methods returning `Result.Failure(...)` for some state-based invariants
+- controllers validate simple request-shape rules
+- application services validate orchestration-level inputs and references
+- domain objects enforce stateful invariants such as duplicate market products, non-positive initial price, and negative supply/demand
 
-Examples of validated conditions include:
+Expected business errors use `Result` / `Result<T>`.
+Unexpected failures are handled by API middleware.
 
-- empty names
-- non-positive day counts
-- non-positive population values
-- missing referenced entities
-- duplicate or missing market offers
-- insufficient warehouse stock
+### Testing
 
-The current codebase does not contain:
+The repository contains:
 
-- FluentValidation
-- DataAnnotations-based request validation attributes
-- explicit `ModelState` handling
-- a centralized validation pipeline
+- domain unit tests
+- application service unit tests
+- simulation unit tests
+- infrastructure integration tests against PostgreSQL
+- API integration tests through `WebApplicationFactory`
 
-## Error handling
+The recommended full verification command remains:
 
-There are two distinct error handling styles in the code:
+`dotnet test RPGEconomy.slnx -m:1`
 
-### Expected business errors
+## Future vision
 
-Expected failures are usually returned as `Result` / `Result<T>`.
+The broader economy vision still includes concepts such as:
 
-Application services and some domain methods use `Result.Failure(...)` for cases such as:
+- states
+- regions
+- trade routes
+- population groups
+- producers
+- institutions and policies
+- economy zones
+- cross-settlement trade and richer macroeconomics
 
-- entity not found
-- invalid input values
-- invalid domain actions
+These concepts are **not implemented today** unless they are explicitly present in the codebase. Vision documents under `docs/vision` describe intended future layers and causal chains, not the current repository boundary.
 
-Controllers map those results to HTTP responses, mostly `400 Bad Request` or `404 Not Found`.
+## Known trade-offs
 
-### Unexpected errors
-
-Unexpected exceptions are handled by custom middleware in `RPGEconomy.API`.
-
-`ExceptionHandlingMiddleware`:
-
-- wraps the rest of the pipeline in `try/catch`
-- logs the exception
-- returns HTTP 500 with a JSON payload containing `error` and `message`
-
-Exceptions are still used in a few infrastructure/startup paths, for example:
-
-- missing connection string during infrastructure registration or migration startup
-- failed database upgrade in `MigrationRunner`
-- invalid day count in `SimulationClock`
-
-## Logging
-
-Logging uses the built-in `ILogger<T>` abstraction.
-
-The current code logs in three places:
-
-### Request logging middleware
-
-`RequestLoggingMiddleware` logs:
-
-- incoming HTTP method, path, and query string
-- outgoing method, path, status code, and elapsed milliseconds
-
-### Exception middleware
-
-`ExceptionHandlingMiddleware` logs unhandled exceptions as errors.
-
-### Simulation decorator
-
-`LoggingSimulationDecorator` wraps `ISimulationExecutor` and logs:
-
-- simulation start
-- successful completion with job id and day range
-- failed completion with the returned error
-
-In addition, DbUp migration execution is configured with `LogToConsole()`.
-
-There is no separate logging package or custom logging infrastructure in the solution today.
-
-## Testing style
-
-The solution now includes automated tests split by concern:
-
-- `RPGEconomy.Domain.Tests` for domain unit tests
-- `RPGEconomy.Application.Tests` for application-service unit tests
-- `RPGEconomy.Simulation.Tests` for simulation unit tests
-- `RPGEconomy.Infrastructure.IntegrationTests` for repository and infrastructure integration tests against PostgreSQL
-- `RPGEconomy.API.IntegrationTests` for end-to-end HTTP tests
-- `RPGEconomy.Testing` as shared test support for PostgreSQL reset/bootstrap and test configuration
-
-Integration tests use a dedicated PostgreSQL configuration from `RPGEconomy.Testing/appsettings.Test.json`. The API integration host and lower-level database helpers both resolve the same test connection string through configuration rather than hardcoded values.
-
-`RPGEconomy.Testing` is also the home for the shared integration-test fixture and synchronization primitives:
-
-- `DatabaseFixture` centralizes database bootstrap and reset lifecycle
-- `IntegrationTestCollection` centralizes the xUnit collection name used by integration-test assemblies
-- `GlobalTestDatabaseLock` serializes access to the shared PostgreSQL test database across integration-test processes
-
-The integration-test projects intentionally keep only thin assembly-specific `CollectionDefinition` glue so the actual lifecycle logic is not duplicated across projects.
-
-At the test runner level, the practical full-suite command is `dotnet test RPGEconomy.slnx -m:1`. Even though integration-test assemblies disable xUnit test parallelization internally, solution-level sequential execution is still important because both integration-test projects share one PostgreSQL environment.
-
-## Notable structural patterns currently present
-
-The codebase currently combines several recognizable patterns:
-
-- layered projects with explicit project references
-- repository pattern for persistence
-- DTO-based service responses
-- `Result`-based business error propagation
-- thin MVC controllers
-- decorator pattern around `ISimulationExecutor`
-- internal simulation job tracking in the application layer
-- startup-time database migration
-- manual SQL with Dapper
-
-These patterns are all present in the implementation today and are the basis of the current architecture.
-
-## Known Trade-offs
-
-- Simulation requests are still synchronous at the HTTP boundary
-- PostgreSQL integration tests require a live database
-- Full-solution test runs should be executed sequentially at the project level because API and infrastructure integration tests share one PostgreSQL environment
-- No centralized validation
+- simulation remains synchronous at the HTTP boundary
+- validation is still imperative rather than centralized
+- market product names are resolved at application/query time instead of being embedded in the market aggregate
+- integration tests require a live PostgreSQL environment
+- current demand generation is intentionally simplistic and simulation-side

@@ -17,7 +17,7 @@ public class MarketSimulationServiceTests
         var warehouse = new Warehouse(1, settlement.Id);
         warehouse.AddItem(99, 12, QualityGrade.Normal);
         var market = new Market(2, settlement.Id);
-        market.RegisterProduct(99, 10);
+        market.RegisterProduct(99, 10m);
 
         var ctx = new SimulationContext(
             1,
@@ -28,7 +28,7 @@ public class MarketSimulationServiceTests
             new Dictionary<int, IReadOnlyList<Building>>(),
             new Dictionary<int, ProductionRecipe>());
 
-        new MarketSimulationService().RunTick(ctx);
+        new MarketSimulationService(new PopulationMarketDemandProvider()).RunTick(ctx);
 
         market.Offers.Should().ContainSingle();
         market.Offers[0].SupplyVolume.Should().Be(12);

@@ -27,7 +27,7 @@ public class ProductTypeService : IProductTypeService
     }
 
     public async Task<Result<ProductTypeDto>> CreateAsync(
-        string name, string description, double basePrice, double weightPerUnit)
+        string name, string description, decimal basePrice, double weightPerUnit)
     {
         if (string.IsNullOrWhiteSpace(name))
             return Result<ProductTypeDto>.Failure("Название товара не может быть пустым");
@@ -41,7 +41,7 @@ public class ProductTypeService : IProductTypeService
     }
 
     public async Task<Result<ProductTypeDto>> UpdateAsync(
-        int id, string name, string description, double basePrice, double weightPerUnit)
+        int id, string name, string description, decimal basePrice, double weightPerUnit)
     {
         if (string.IsNullOrWhiteSpace(name))
             return Result<ProductTypeDto>.Failure("Название товара не может быть пустым");

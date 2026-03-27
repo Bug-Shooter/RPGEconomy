@@ -52,8 +52,8 @@ public class SettlementServiceTests
         warehouse.AddItem(10, 7, QualityGrade.Normal);
         var warehouseRepo = new WarehouseRepositoryFake(warehouse);
         var market = new Market(4, settlement.Id);
-        market.RegisterProduct(10, 12.5);
-        market.UpdateMarket(10, 7, 10);
+        market.RegisterProduct(10, 12.5m);
+        market.UpdateProductState(10, 7, 10);
         var marketRepo = new MarketRepositoryFake(market);
         var service = new SettlementService(settlementRepo, worldRepo, warehouseRepo, marketRepo);
 
@@ -201,7 +201,7 @@ public class SettlementServiceTests
             foreach (var offer in entity.Offers)
             {
                 stored.RegisterProduct(offer.ProductTypeId, offer.CurrentPrice);
-                stored.UpdateMarket(offer.ProductTypeId, offer.SupplyVolume, offer.DemandVolume);
+                stored.UpdateProductState(offer.ProductTypeId, offer.SupplyVolume, offer.DemandVolume);
             }
 
             BySettlementId[entity.SettlementId] = stored;
