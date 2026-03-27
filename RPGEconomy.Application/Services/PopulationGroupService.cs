@@ -45,6 +45,7 @@ public class PopulationGroupService : IPopulationGroupService
         int settlementId,
         string name,
         int populationSize,
+        decimal reserveCoverageTicks,
         IReadOnlyList<ConsumptionProfileItemDto> consumptionProfile)
     {
         var settlement = await _settlementRepo.GetByIdAsync(settlementId);
@@ -59,6 +60,7 @@ public class PopulationGroupService : IPopulationGroupService
             settlementId,
             name,
             populationSize,
+            reserveCoverageTicks,
             consumptionProfile.Select(item => (item.ProductTypeId, item.AmountPerPersonPerTick)));
 
         if (!createResult.IsSuccess)
@@ -77,6 +79,7 @@ public class PopulationGroupService : IPopulationGroupService
         int id,
         string name,
         int populationSize,
+        decimal reserveCoverageTicks,
         IReadOnlyList<ConsumptionProfileItemDto> consumptionProfile)
     {
         var group = await _populationGroupRepo.GetByIdAsync(id);
@@ -90,6 +93,7 @@ public class PopulationGroupService : IPopulationGroupService
         var updateResult = group.Update(
             name,
             populationSize,
+            reserveCoverageTicks,
             consumptionProfile.Select(item => (item.ProductTypeId, item.AmountPerPersonPerTick)));
 
         if (!updateResult.IsSuccess)
@@ -140,8 +144,13 @@ public class PopulationGroupService : IPopulationGroupService
             group.SettlementId,
             group.Name,
             group.PopulationSize,
+            group.ReserveCoverageTicks,
             group.ConsumptionProfile
                 .Select(item => new ConsumptionProfileItemDto(item.ProductTypeId, item.AmountPerPersonPerTick))
+                .ToList()
+                .AsReadOnly(),
+            group.StockItems
+                .Select(item => new ReserveStockItemDto(item.ProductTypeId, item.Quantity))
                 .ToList()
                 .AsReadOnly());
 }

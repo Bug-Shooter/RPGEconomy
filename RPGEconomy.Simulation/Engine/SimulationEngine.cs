@@ -2,6 +2,7 @@ using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.Abstractions.Services;
 using RPGEconomy.Application.DTOs;
 using RPGEconomy.Domain.Common;
+using RPGEconomy.Domain.Events;
 using RPGEconomy.Domain.Markets;
 using RPGEconomy.Domain.Population;
 using RPGEconomy.Domain.Production;
@@ -15,6 +16,7 @@ public class SimulationEngine : ISimulationExecutor
     private readonly ISettlementRepository _settlementRepo;
     private readonly IWarehouseRepository _warehouseRepo;
     private readonly IMarketRepository _marketRepo;
+    private readonly IEconomicEventRepository _economicEventRepo;
     private readonly IPopulationGroupRepository _populationGroupRepo;
     private readonly IBuildingRepository _buildingRepo;
     private readonly IProductionRecipeRepository _recipeRepo;
@@ -27,6 +29,7 @@ public class SimulationEngine : ISimulationExecutor
         ISettlementRepository settlementRepo,
         IWarehouseRepository warehouseRepo,
         IMarketRepository marketRepo,
+        IEconomicEventRepository economicEventRepo,
         IPopulationGroupRepository populationGroupRepo,
         IBuildingRepository buildingRepo,
         IProductionRecipeRepository recipeRepo,
@@ -37,6 +40,7 @@ public class SimulationEngine : ISimulationExecutor
         _settlementRepo = settlementRepo;
         _warehouseRepo = warehouseRepo;
         _marketRepo = marketRepo;
+        _economicEventRepo = economicEventRepo;
         _populationGroupRepo = populationGroupRepo;
         _buildingRepo = buildingRepo;
         _recipeRepo = recipeRepo;
@@ -73,8 +77,10 @@ public class SimulationEngine : ISimulationExecutor
 
     private void RunTick(SimulationContext ctx)
     {
+        _settlementEconomyService.ConsumeHouseholdStocks(ctx);
         _productionService.RunTick(ctx);
-        _settlementEconomyService.RunTick(ctx);
+        _settlementEconomyService.ReplenishReservesAndUpdateMarket(ctx);
+        ctx.AdvanceDay();
     }
 
     private async Task<SimulationContext> LoadContextAsync(int worldId, int currentDay)
@@ -85,6 +91,7 @@ public class SimulationEngine : ISimulationExecutor
         var markets = new Dictionary<int, Market>();
         var populationGroups = new Dictionary<int, IReadOnlyList<PopulationGroup>>();
         var buildings = new Dictionary<int, IReadOnlyList<Building>>();
+        var economicEvents = new Dictionary<int, IReadOnlyList<EconomicEvent>>();
 
         foreach (var settlement in settlements)
         {
@@ -98,6 +105,7 @@ public class SimulationEngine : ISimulationExecutor
 
             populationGroups[settlement.Id] = await _populationGroupRepo.GetBySettlementIdAsync(settlement.Id);
             buildings[settlement.Id] = await _buildingRepo.GetBySettlementIdAsync(settlement.Id);
+            economicEvents[settlement.Id] = await _economicEventRepo.GetBySettlementIdAsync(settlement.Id);
         }
 
         var allRecipes = await _recipeRepo.GetAllAsync();
@@ -111,13 +119,20 @@ public class SimulationEngine : ISimulationExecutor
             markets,
             populationGroups,
             buildings,
-            recipes);
+            recipes,
+            economicEvents);
     }
 
     private async Task PersistContextAsync(SimulationContext ctx)
     {
         foreach (var warehouse in ctx.Warehouses.Values)
             await _warehouseRepo.SaveAsync(warehouse);
+
+        foreach (var populationGroup in ctx.PopulationGroups.Values.SelectMany(groups => groups))
+            await _populationGroupRepo.SaveAsync(populationGroup);
+
+        foreach (var building in ctx.Buildings.Values.SelectMany(buildings => buildings))
+            await _buildingRepo.SaveAsync(building);
 
         foreach (var market in ctx.Markets.Values)
             await _marketRepo.SaveAsync(market);

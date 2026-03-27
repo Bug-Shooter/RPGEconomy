@@ -17,10 +17,11 @@ public class BuildingServiceTests
             new RecipeRepositoryFake(
                 ProductionRecipe.Create("Bread", 1, [], [new RecipeIngredient(2, 1)]).Value!));
 
-        var result = await service.CreateAsync(1, "Bakery", 1, 3);
+        var result = await service.CreateAsync(1, "Bakery", 1, 3, 2m);
 
         result.IsSuccess.Should().BeTrue();
         result.Value!.Name.Should().Be("Bakery");
+        result.Value.InputReserveCoverageTicks.Should().Be(2m);
     }
 
     [Fact]
@@ -49,7 +50,10 @@ public class BuildingServiceTests
         public Task<int> SaveAsync(Building entity)
         {
             var id = entity.Id == 0 ? _nextId++ : entity.Id;
-            _items[id] = new Building(id, entity.Name, entity.SettlementId, entity.RecipeId, entity.WorkerCount, entity.IsActive);
+            var clone = new Building(id, entity.Name, entity.SettlementId, entity.RecipeId, entity.WorkerCount, entity.IsActive, entity.InputReserveCoverageTicks);
+            foreach (var item in entity.InputReserveItems)
+                clone.ReceiveInputReserve(item.ProductTypeId, item.Quantity);
+            _items[id] = clone;
             return Task.FromResult(id);
         }
 

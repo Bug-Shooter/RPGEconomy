@@ -24,7 +24,7 @@ public class PopulationGroupRepository : IPopulationGroupRepository
         if (group is null)
             return null;
 
-        await LoadConsumptionProfileAsync(conn, group);
+        await LoadChildrenAsync(conn, group);
         return group;
     }
 
@@ -37,7 +37,7 @@ public class PopulationGroupRepository : IPopulationGroupRepository
             new { SettlementId = settlementId })).ToList();
 
         foreach (var group in groups)
-            await LoadConsumptionProfileAsync(conn, group);
+            await LoadChildrenAsync(conn, group);
 
         return groups.AsReadOnly();
     }
@@ -55,7 +55,8 @@ public class PopulationGroupRepository : IPopulationGroupRepository
                 {
                     entity.SettlementId,
                     entity.Name,
-                    entity.PopulationSize
+                    entity.PopulationSize,
+                    entity.ReserveCoverageTicks
                 });
         }
         else
@@ -67,7 +68,8 @@ public class PopulationGroupRepository : IPopulationGroupRepository
                 {
                     entity.Id,
                     entity.Name,
-                    entity.PopulationSize
+                    entity.PopulationSize,
+                    entity.ReserveCoverageTicks
                 });
         }
 
@@ -87,6 +89,22 @@ public class PopulationGroupRepository : IPopulationGroupRepository
                 }));
         }
 
+        await conn.ExecuteAsync(
+            PopulationGroupQueries.DeleteStockItems,
+            new { PopulationGroupId = populationGroupId });
+
+        if (entity.StockItems.Count > 0)
+        {
+            await conn.ExecuteAsync(
+                PopulationGroupQueries.InsertStockItem,
+                entity.StockItems.Select(item => new
+                {
+                    PopulationGroupId = populationGroupId,
+                    item.ProductTypeId,
+                    item.Quantity
+                }));
+        }
+
         return populationGroupId;
     }
 
@@ -102,18 +120,28 @@ public class PopulationGroupRepository : IPopulationGroupRepository
             new { PopulationGroupId = id },
             tx);
         await conn.ExecuteAsync(
+            PopulationGroupQueries.DeleteStockItems,
+            new { PopulationGroupId = id },
+            tx);
+        await conn.ExecuteAsync(
             PopulationGroupQueries.Delete,
             new { Id = id },
             tx);
         tx.Commit();
     }
 
-    private static async Task LoadConsumptionProfileAsync(IDbConnection conn, PopulationGroup group)
+    private static async Task LoadChildrenAsync(IDbConnection conn, PopulationGroup group)
     {
         var items = await conn.QueryAsync<ConsumptionProfileItem>(
             PopulationGroupQueries.GetConsumptionProfile,
             new { PopulationGroupId = group.Id });
 
         group.LoadConsumptionProfile(items);
+
+        var stockItems = await conn.QueryAsync<PopulationStockItem>(
+            PopulationGroupQueries.GetStockItems,
+            new { PopulationGroupId = group.Id });
+
+        group.LoadStockItems(stockItems);
     }
 }

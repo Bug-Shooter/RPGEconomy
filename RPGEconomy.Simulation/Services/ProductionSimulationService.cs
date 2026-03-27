@@ -23,21 +23,30 @@ public class ProductionSimulationService
                 if (plannedBatches <= 0) continue;
 
                 var plannedBatchCount = (decimal)plannedBatches;
-                var actualBatchCount = CalculateActualBatchCount(warehouse, recipe, plannedBatchCount);
+                var actualBatchCount = CalculateActualBatchCount(building, warehouse, recipe, plannedBatchCount);
 
-                AddProductionDemand(ctx, settlement.Id, warehouse, recipe, plannedBatchCount);
+                AddProductionDemand(ctx, settlement.Id, building, warehouse, recipe, plannedBatchCount);
 
                 if (actualBatchCount <= 0m) continue;
 
                 foreach (var input in recipe.Inputs)
                 {
-                    var withdrawal = warehouse.Withdraw(
-                        input.ProductTypeId,
-                        input.Quantity * actualBatchCount,
-                        QualityGrade.Normal);
+                    var requiredQuantity = input.Quantity * actualBatchCount;
+                    var reserveQuantity = decimal.Min(building.GetInputReserveQuantity(input.ProductTypeId), requiredQuantity);
+                    if (reserveQuantity > 0m)
+                    {
+                        var reserveWithdrawal = building.ConsumeInputReserve(input.ProductTypeId, reserveQuantity);
+                        if (!reserveWithdrawal.IsSuccess)
+                            throw new InvalidOperationException(reserveWithdrawal.Error);
+                    }
 
-                    if (!withdrawal.IsSuccess)
-                        throw new InvalidOperationException(withdrawal.Error);
+                    var warehouseQuantity = requiredQuantity - reserveQuantity;
+                    if (warehouseQuantity > 0m)
+                    {
+                        var warehouseWithdrawal = warehouse.Withdraw(input.ProductTypeId, warehouseQuantity, QualityGrade.Normal);
+                        if (!warehouseWithdrawal.IsSuccess)
+                            throw new InvalidOperationException(warehouseWithdrawal.Error);
+                    }
                 }
 
                 foreach (var output in recipe.Outputs)
@@ -55,6 +64,7 @@ public class ProductionSimulationService
     }
 
     private static decimal CalculateActualBatchCount(
+        Building building,
         Warehouse warehouse,
         ProductionRecipe recipe,
         decimal plannedBatchCount)
@@ -65,7 +75,9 @@ public class ProductionSimulationService
         var actualBatchCount = plannedBatchCount;
         foreach (var input in recipe.Inputs)
         {
-            var availableQuantity = warehouse.GetAvailableQuantity(input.ProductTypeId, QualityGrade.Normal);
+            var availableQuantity =
+                building.GetInputReserveQuantity(input.ProductTypeId) +
+                warehouse.GetAvailableQuantity(input.ProductTypeId, QualityGrade.Normal);
             var inputLimitedBatchCount = availableQuantity / input.Quantity;
             actualBatchCount = decimal.Min(actualBatchCount, inputLimitedBatchCount);
         }
@@ -76,6 +88,7 @@ public class ProductionSimulationService
     private static void AddProductionDemand(
         SimulationContext ctx,
         int settlementId,
+        Building building,
         Warehouse warehouse,
         ProductionRecipe recipe,
         decimal plannedBatchCount)
@@ -86,7 +99,9 @@ public class ProductionSimulationService
         foreach (var input in recipe.Inputs)
         {
             var requiredQuantity = input.Quantity * plannedBatchCount;
-            var availableQuantity = warehouse.GetAvailableQuantity(input.ProductTypeId, QualityGrade.Normal);
+            var availableQuantity =
+                building.GetInputReserveQuantity(input.ProductTypeId) +
+                warehouse.GetAvailableQuantity(input.ProductTypeId, QualityGrade.Normal);
             var missingQuantity = decimal.Max(requiredQuantity - availableQuantity, 0m);
 
             ctx.AddProductionDemand(settlementId, input.ProductTypeId, missingQuantity);

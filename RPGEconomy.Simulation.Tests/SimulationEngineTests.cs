@@ -1,6 +1,7 @@
 using FluentAssertions;
 using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.DTOs;
+using RPGEconomy.Domain.Events;
 using RPGEconomy.Domain.Markets;
 using RPGEconomy.Domain.Population;
 using RPGEconomy.Domain.Production;
@@ -22,6 +23,7 @@ public class SimulationEngineTests
             new SettlementRepositoryFake(),
             new WarehouseRepositoryFake(),
             new MarketRepositoryFake(),
+            new EconomicEventRepositoryFake(),
             new PopulationGroupRepositoryFake(),
             new BuildingRepositoryFake(),
             new RecipeRepositoryFake());
@@ -45,6 +47,7 @@ public class SimulationEngineTests
             new SettlementRepositoryFake(settlement),
             new WarehouseRepositoryFake(new Warehouse(20, settlement.Id)),
             new MarketRepositoryFake(market),
+            new EconomicEventRepositoryFake(),
             new PopulationGroupRepositoryFake(
                 PopulationGroup.Create(settlement.Id, "Peasants", 50, [(2, 0.1m)]).Value!),
             new BuildingRepositoryFake(new Building(40, "Bakery", settlement.Id, 100, 2, true)),
@@ -61,7 +64,7 @@ public class SimulationEngineTests
 
         var price = result.Value.Result.Settlements[0].Prices[0];
         price.ProductTypeId.Should().Be(2);
-        price.Supply.Should().Be(4m);
+        price.Supply.Should().Be(0m);
         price.Demand.Should().Be(5m);
     }
 
@@ -71,7 +74,6 @@ public class SimulationEngineTests
         var world = new WorldEntity(1, "World", "Desc", 0);
         var settlement = new Settlement(10, 1, "Town", 50);
         var warehouse = new Warehouse(20, settlement.Id);
-        warehouse.AddItem(1, 3m, QualityGrade.Normal);
 
         var market = new Market(30, settlement.Id);
         market.RegisterProduct(1, 5m);
@@ -83,14 +85,18 @@ public class SimulationEngineTests
             [new RecipeIngredient(1, 2m)],
             [new RecipeIngredient(2, 1m)]).Value!;
 
+        var building = new Building(40, "Bakery", settlement.Id, 100, 2, true);
+        building.ReceiveInputReserve(1, 3m);
+
         var engine = CreateEngine(
             new WorldRepositoryFake(world),
             new SettlementRepositoryFake(settlement),
             new WarehouseRepositoryFake(warehouse),
             new MarketRepositoryFake(market),
+            new EconomicEventRepositoryFake(),
             new PopulationGroupRepositoryFake(
                 PopulationGroup.Create(settlement.Id, "Peasants", 50, [(2, 0.1m)]).Value!),
-            new BuildingRepositoryFake(new Building(40, "Bakery", settlement.Id, 100, 2, true)),
+            new BuildingRepositoryFake(building),
             new RecipeRepositoryFake((100, recipe)));
 
         var result = await engine.ExecuteAsync(new SimulationExecutionRequest(1, world.Id, 1), TestContext.Current.CancellationToken);
@@ -99,8 +105,8 @@ public class SimulationEngineTests
         var settlementResult = result.Value!.Result.Settlements.Single();
 
         settlementResult.Prices.Should().Contain(x => x.ProductTypeId == 1 && x.Supply == 0m && x.Demand == 1m);
-        settlementResult.Prices.Should().Contain(x => x.ProductTypeId == 2 && x.Supply == 1.5m && x.Demand == 5m);
-        settlementResult.Warehouse.Should().ContainSingle(x => x.ProductTypeId == 2 && x.Quantity == 1.5m);
+        settlementResult.Prices.Should().Contain(x => x.ProductTypeId == 2 && x.Supply == 0m && x.Demand == 5m);
+        settlementResult.Warehouse.Should().BeEmpty();
     }
 
     private static SimulationEngine CreateEngine(
@@ -108,6 +114,7 @@ public class SimulationEngineTests
         ISettlementRepository settlements,
         IWarehouseRepository warehouses,
         IMarketRepository markets,
+        IEconomicEventRepository economicEvents,
         IPopulationGroupRepository populationGroups,
         IBuildingRepository buildings,
         IProductionRecipeRepository recipes) =>
@@ -116,6 +123,7 @@ public class SimulationEngineTests
             settlements,
             warehouses,
             markets,
+            economicEvents,
             populationGroups,
             buildings,
             recipes,
@@ -207,6 +215,30 @@ public class SimulationEngineTests
             Task.FromResult((IReadOnlyList<Building>)_items.Where(x => x.SettlementId == settlementId).ToList().AsReadOnly());
 
         public Task<int> SaveAsync(Building entity) => Task.FromResult(entity.Id);
+
+        public Task DeleteAsync(int id) => Task.CompletedTask;
+    }
+
+    private sealed class EconomicEventRepositoryFake : IEconomicEventRepository
+    {
+        private readonly IReadOnlyList<EconomicEvent> _items;
+
+        public EconomicEventRepositoryFake(params EconomicEvent[] items)
+            => _items = items;
+
+        public Task<EconomicEvent?> GetByIdAsync(int id) => Task.FromResult(_items.FirstOrDefault(x => x.Id == id));
+
+        public Task<IReadOnlyList<EconomicEvent>> GetBySettlementIdAsync(int settlementId) =>
+            Task.FromResult((IReadOnlyList<EconomicEvent>)_items.Where(x => x.SettlementId == settlementId).ToList().AsReadOnly());
+
+        public Task<IReadOnlyList<EconomicEvent>> GetActiveBySettlementIdAsync(int settlementId, int currentDay) =>
+            Task.FromResult((IReadOnlyList<EconomicEvent>)_items
+                .Where(x => x.SettlementId == settlementId)
+                .Where(x => x.GetActiveEffects(currentDay).Count > 0)
+                .ToList()
+                .AsReadOnly());
+
+        public Task<int> SaveAsync(EconomicEvent entity) => Task.FromResult(entity.Id);
 
         public Task DeleteAsync(int id) => Task.CompletedTask;
     }

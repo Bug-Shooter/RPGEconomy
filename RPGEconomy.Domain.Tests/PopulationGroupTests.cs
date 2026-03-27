@@ -41,4 +41,35 @@ public class PopulationGroupTests
 
         result.IsSuccess.Should().BeFalse();
     }
+
+    [Fact]
+    public void CalculateReserveDemand_Should_Use_Current_Stock_And_Coverage_Ticks()
+    {
+        var group = PopulationGroup.Create(
+            1,
+            "Peasants",
+            50,
+            2m,
+            [(10, 0.1m)]).Value!;
+        group.ReceiveReserveStock(10, 3m);
+
+        var consumptionDemand = group.CalculateConsumptionDemand();
+        var desiredReserve = group.CalculateDesiredReserve(consumptionDemand);
+        var reserveDemand = group.CalculateReserveDemand(desiredReserve);
+
+        desiredReserve[10].Should().Be(10m);
+        reserveDemand[10].Should().Be(7m);
+    }
+
+    [Fact]
+    public void ConsumeFromStock_Should_Return_Unmet_Demand_Only()
+    {
+        var group = PopulationGroup.Create(1, "Peasants", 10, 0m, [(10, 0.1m)]).Value!;
+        group.ReceiveReserveStock(10, 0.4m);
+
+        var unmetDemand = group.ConsumeFromStock(new Dictionary<int, decimal> { [10] = 1m });
+
+        unmetDemand[10].Should().Be(0.6m);
+        group.GetStockQuantity(10).Should().Be(0m);
+    }
 }

@@ -39,13 +39,16 @@ public class BuildingService : IBuildingService
     }
 
     public async Task<Result<BuildingDto>> CreateAsync(
-        int settlementId, string name, int recipeId, int workerCount)
+        int settlementId, string name, int recipeId, int workerCount, decimal inputReserveCoverageTicks)
     {
         if (string.IsNullOrWhiteSpace(name))
             return Result<BuildingDto>.Failure("Название здания не может быть пустым");
 
         if (workerCount < 0)
             return Result<BuildingDto>.Failure("Количество рабочих не может быть отрицательным");
+
+        if (inputReserveCoverageTicks < 0m)
+            return Result<BuildingDto>.Failure("Покрытие входного резерва не может быть отрицательным");
 
         var settlement = await _settlementRepo.GetByIdAsync(settlementId);
         if (settlement is null)
@@ -55,13 +58,13 @@ public class BuildingService : IBuildingService
         if (recipe is null)
             return Result<BuildingDto>.Failure($"Рецепт с Id {recipeId} не найден");
 
-        var building = Building.Create(name, settlementId, recipeId, workerCount);
+        var building = Building.Create(name, settlementId, recipeId, workerCount, inputReserveCoverageTicks);
         var id = await _buildingRepo.SaveAsync(building);
 
         return Result<BuildingDto>.Success(ToDto(building) with { Id = id });
     }
 
-    public async Task<Result<BuildingDto>> UpdateAsync(int id, string name, int workerCount)
+    public async Task<Result<BuildingDto>> UpdateAsync(int id, string name, int workerCount, decimal inputReserveCoverageTicks)
     {
         if (string.IsNullOrWhiteSpace(name))
             return Result<BuildingDto>.Failure("Название здания не может быть пустым");
@@ -69,11 +72,14 @@ public class BuildingService : IBuildingService
         if (workerCount < 0)
             return Result<BuildingDto>.Failure("Количество рабочих не может быть отрицательным");
 
+        if (inputReserveCoverageTicks < 0m)
+            return Result<BuildingDto>.Failure("Покрытие входного резерва не может быть отрицательным");
+
         var building = await _buildingRepo.GetByIdAsync(id);
         if (building is null)
             return Result<BuildingDto>.Failure($"Здание с Id {id} не найдено");
 
-        building.Update(name, workerCount);
+        building.Update(name, workerCount, inputReserveCoverageTicks);
         await _buildingRepo.SaveAsync(building);
 
         return Result<BuildingDto>.Success(ToDto(building));
@@ -113,5 +119,16 @@ public class BuildingService : IBuildingService
     }
 
     private static BuildingDto ToDto(Building b) =>
-        new(b.Id, b.Name, b.SettlementId, b.RecipeId, b.WorkerCount, b.IsActive);
+        new(
+            b.Id,
+            b.Name,
+            b.SettlementId,
+            b.RecipeId,
+            b.WorkerCount,
+            b.IsActive,
+            b.InputReserveCoverageTicks,
+            b.InputReserveItems
+                .Select(item => new ReserveStockItemDto(item.ProductTypeId, item.Quantity))
+                .ToList()
+                .AsReadOnly());
 }

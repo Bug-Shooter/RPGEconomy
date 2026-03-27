@@ -40,26 +40,31 @@ Project references:
 
 ### Implemented domain scope
 
-The current codebase now implements an early **Stage 3** baseline:
+The current codebase now implements an early **Stage 4** baseline:
 
 - worlds and settlements
 - warehouses and inventory items
 - product types
 - production recipes and buildings
 - population groups with consumption profiles
+- household reserve stocks and reserve coverage rules
 - local markets with per-product prices, supply, and demand
 - synchronous simulation advancement with persisted simulation jobs
 - currencies and resource types as CRUD-capable foundational entities
 - resource-dependent production with production chains and production demand
+- building input reserve stocks
+- settlement-scoped economic events and effects
 
-Important Stage 3 interpretation in this repository:
+Important Stage 4 interpretation in this repository:
 
 - buildings remain the practical producer layer
 - no separate `Producer` aggregate is introduced alongside buildings
-- settlement warehouse stock is the shared source of production inputs and the carrier of produced outputs
+- settlement warehouse stock is market-visible stock and the carrier of produced outputs
+- building input reserves are persisted separately from the warehouse
+- household reserve stock is persisted on `PopulationGroup`
 - recipes keep the existing `Inputs` + `Outputs` shape instead of switching to a separate `InputRequirement` model
 - the market still receives only aggregated `supply` / `demand`
-- market demand is the sum of population consumption demand and production input demand
+- market demand is the sum of population consumption demand, production demand, and reserve demand
 - zero-input recipes remain allowed as legacy source recipes for foundational goods
 
 ### Request handling and API style
@@ -74,6 +79,7 @@ Important routes currently include:
 - `/api/worlds`
 - `/api/worlds/{worldId}/settlements`
 - `/api/settlements/{settlementId}/buildings`
+- `/api/settlements/{settlementId}/economic-events`
 - `/api/settlements/{settlementId}/population-groups`
 - `/api/settlements/{settlementId}/market/prices`
 - `/api/settlements/{settlementId}/market/products`
@@ -85,7 +91,7 @@ Important routes currently include:
 - PostgreSQL with `Npgsql`
 - Dapper repositories with handwritten SQL query classes
 - DbUp-based startup migrations
-- aggregate-style persistence for warehouses, markets, recipes, and population-group profiles via explicit child-row replacement
+- aggregate-style persistence for warehouses, markets, recipes, population-group children, building reserve children, and event effects via explicit child-row replacement
 
 Money-related columns use `NUMERIC` in the database and `decimal` in code for:
 
@@ -96,6 +102,8 @@ Money-related columns use `NUMERIC` in the database and `decimal` in code for:
 Economic quantities also use `decimal` / `NUMERIC` for:
 
 - warehouse inventory quantity
+- household reserve quantity
+- building input reserve quantity
 - recipe ingredient quantity
 - market supply volume
 - market demand volume
@@ -131,23 +139,34 @@ The simulation runtime loads settlements and related aggregates once, runs ticks
 
 Current tick order:
 
-1. production tick
-2. settlement-economy aggregation tick
+1. household stock consumption
+2. production tick from building input reserves
+3. reserve-demand calculation and reserve replenishment
+4. settlement-economy aggregation tick
 
 The production tick currently:
 
 - computes labor-limited building capacity
-- limits actual output by available input resources in the settlement warehouse
+- limits actual output by available building input reserves
 - allows partial production when inputs are insufficient
-- consumes inputs from the settlement warehouse
+- consumes inputs from building reserve stock
 - writes outputs back to the settlement warehouse
 - records aggregated production demand for missing inputs
 
 The settlement-economy tick currently derives:
 
-- supply from warehouse stock after building-based production
-- demand from `PopulationGroup` consumption profiles
+- demand from household consumption not covered by household stock
 - additional demand from production-side missing inputs
+- household reserve demand from reserve gaps
+- producer reserve demand from input-reserve gaps
+- supply from warehouse stock after production and reserve transfers
+
+Economic events:
+
+- belong to one settlement
+- expose active effects for the current simulation day
+- may multiply consumption demand, desired reserve coverage, producer reserve coverage, or final demand
+- never set prices directly
 
 The market remains independent from why demand or supply changed. Buildings and population groups adapt into aggregate values before they reach the market.
 
@@ -197,4 +216,4 @@ These concepts are **not implemented today** unless they are explicitly present 
 - market product names are resolved at application/query time instead of being embedded in the market aggregate
 - integration tests require a live PostgreSQL environment
 - buildings still serve as the producer abstraction, so richer producer behavior must continue adapting into warehouse and market boundaries instead of bypassing them
-- production chains are intentionally deterministic and simple: building order is stable, but there is no optimization or priority model yet
+- production chains are intentionally deterministic and simple: building order is stable, reserve transfers use fixed-band ordering plus deterministic pro-rata allocation, and there is still no optimization or richer priority model

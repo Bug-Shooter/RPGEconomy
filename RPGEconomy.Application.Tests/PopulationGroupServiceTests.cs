@@ -24,10 +24,12 @@ public class PopulationGroupServiceTests
             settlement.Id,
             "Peasants",
             50,
+            3m,
             [new ConsumptionProfileItemDto(10, 0.5m)]);
 
         result.IsSuccess.Should().BeTrue();
         settlementRepo.Entities[settlement.Id].Population.Should().Be(50);
+        result.Value!.ReserveCoverageTicks.Should().Be(3m);
         result.Value!.ConsumptionProfile.Should().ContainSingle(x => x.ProductTypeId == 10 && x.AmountPerPersonPerTick == 0.5m);
     }
 
@@ -84,11 +86,14 @@ public class PopulationGroupServiceTests
 
         private static PopulationGroup Clone(PopulationGroup entity, int id)
         {
-            var clone = new PopulationGroup(id, entity.SettlementId, entity.Name, entity.PopulationSize);
+            var clone = new PopulationGroup(id, entity.SettlementId, entity.Name, entity.PopulationSize, entity.ReserveCoverageTicks);
             clone.Update(
                 entity.Name,
                 entity.PopulationSize,
+                entity.ReserveCoverageTicks,
                 entity.ConsumptionProfile.Select(item => (item.ProductTypeId, item.AmountPerPersonPerTick)));
+            foreach (var item in entity.StockItems)
+                clone.ReceiveReserveStock(item.ProductTypeId, item.Quantity);
             return clone;
         }
     }

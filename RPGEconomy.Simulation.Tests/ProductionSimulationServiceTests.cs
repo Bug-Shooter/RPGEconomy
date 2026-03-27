@@ -1,4 +1,5 @@
 using FluentAssertions;
+using RPGEconomy.Domain.Events;
 using RPGEconomy.Domain.Markets;
 using RPGEconomy.Domain.Population;
 using RPGEconomy.Domain.Production;
@@ -15,10 +16,11 @@ public class ProductionSimulationServiceTests
     public void RunTick_Should_Produce_Output_When_Building_Is_Active_And_Inputs_Are_Available()
     {
         var warehouse = new Warehouse(1, 10);
-        warehouse.AddItem(1, 4m, QualityGrade.Normal);
+        var building = new Building(1, "Bakery", 10, 100, 2, true);
+        building.ReceiveInputReserve(1, 4m);
         var ctx = CreateContext(
             warehouse,
-            [new Building(1, "Bakery", 10, 100, 2, true)],
+            [building],
             new Dictionary<int, ProductionRecipe>
             {
                 [100] = ProductionRecipe.Create(
@@ -39,10 +41,11 @@ public class ProductionSimulationServiceTests
     public void RunTick_Should_Produce_Partially_And_Record_Missing_Input_Demand()
     {
         var warehouse = new Warehouse(1, 10);
-        warehouse.AddItem(1, 3m, QualityGrade.Normal);
+        var building = new Building(1, "Bakery", 10, 100, 2, true);
+        building.ReceiveInputReserve(1, 3m);
         var ctx = CreateContext(
             warehouse,
-            [new Building(1, "Bakery", 10, 100, 2, true)],
+            [building],
             new Dictionary<int, ProductionRecipe>
             {
                 [100] = ProductionRecipe.Create(
@@ -59,10 +62,10 @@ public class ProductionSimulationServiceTests
     }
 
     [Fact]
-    public void RunTick_Should_Not_Produce_When_Only_High_Quality_Input_Exists()
+    public void RunTick_Should_Use_Warehouse_Stock_When_Input_Reserve_Is_Missing()
     {
         var warehouse = new Warehouse(1, 10);
-        warehouse.AddItem(1, 4m, QualityGrade.High);
+        warehouse.AddItem(1, 4m, QualityGrade.Normal);
         var ctx = CreateContext(
             warehouse,
             [new Building(1, "Bakery", 10, 100, 2, true)],
@@ -77,21 +80,23 @@ public class ProductionSimulationServiceTests
 
         new ProductionSimulationService().RunTick(ctx);
 
-        warehouse.Items.Should().NotContain(x => x.ProductTypeId == 2);
-        warehouse.Items.Should().ContainSingle(x => x.ProductTypeId == 1 && x.Quantity == 4m && x.Quality == QualityGrade.High.Name);
-        ctx.GetProductionDemand(10).Should().ContainSingle(x => x.Key == 1 && x.Value == 4m);
+        warehouse.Items.Should().ContainSingle(x => x.ProductTypeId == 2 && x.Quantity == 2m);
+        warehouse.Items.Should().NotContain(x => x.ProductTypeId == 1);
+        ctx.GetProductionDemand(10).Should().BeEmpty();
     }
 
     [Fact]
     public void RunTick_Should_Use_Outputs_From_Earlier_Buildings_In_Deterministic_Order()
     {
         var warehouse = new Warehouse(1, 10);
-        warehouse.AddItem(1, 1m, QualityGrade.Normal);
+        var mill = new Building(1, "Mill", 10, 100, 1, true);
+        mill.ReceiveInputReserve(1, 1m);
+        var bakery = new Building(2, "Bakery", 10, 101, 1, true);
         var ctx = CreateContext(
             warehouse,
             [
-                new Building(1, "Mill", 10, 100, 1, true),
-                new Building(2, "Bakery", 10, 101, 1, true)
+                mill,
+                bakery
             ],
             new Dictionary<int, ProductionRecipe>
             {
@@ -127,6 +132,7 @@ public class ProductionSimulationServiceTests
             new Dictionary<int, Market> { [settlement.Id] = new Market(2, settlement.Id) },
             new Dictionary<int, IReadOnlyList<PopulationGroup>>(),
             new Dictionary<int, IReadOnlyList<Building>> { [settlement.Id] = buildings },
-            recipes);
+            recipes,
+            new Dictionary<int, IReadOnlyList<EconomicEvent>>());
     }
 }

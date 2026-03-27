@@ -11,11 +11,13 @@ public interface IPopulationGroupService
         int settlementId,
         string name,
         int populationSize,
+        decimal reserveCoverageTicks,
         IReadOnlyList<ConsumptionProfileItemDto> consumptionProfile);
     Task<Result<PopulationGroupDto>> UpdateAsync(
         int id,
         string name,
         int populationSize,
+        decimal reserveCoverageTicks,
         IReadOnlyList<ConsumptionProfileItemDto> consumptionProfile);
     Task<Result> DeleteAsync(int id);
 }

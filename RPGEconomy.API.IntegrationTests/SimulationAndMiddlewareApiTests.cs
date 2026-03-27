@@ -86,12 +86,13 @@ public class SimulationAndMiddlewareApiTests : IAsyncLifetime
             new { days = 1 },
             cancellationToken: TestContext.Current.CancellationToken);
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, responseBody);
         var payload = await response.Content.ReadFromJsonAsync<SimulationResultResponse>(cancellationToken: TestContext.Current.CancellationToken);
         payload.Should().NotBeNull();
         payload!.Settlements.Should().ContainSingle();
         payload.Settlements[0].Prices.Should().ContainSingle(
-            x => x.ProductTypeId == productId && x.Supply == 2m && x.Demand == 5m && x.Price > 10m);
+            x => x.ProductTypeId == productId && x.Supply == 0m && x.Demand == 5m && x.Price > 10m);
         payload.Settlements[0].Population.Should().Be(50);
     }
 
@@ -146,13 +147,14 @@ public class SimulationAndMiddlewareApiTests : IAsyncLifetime
             new { days = 1 },
             cancellationToken: TestContext.Current.CancellationToken);
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, responseBody);
         var payload = await response.Content.ReadFromJsonAsync<SimulationResultResponse>(cancellationToken: TestContext.Current.CancellationToken);
         payload.Should().NotBeNull();
 
         var prices = payload!.Settlements.Single().Prices;
         prices.Should().Contain(x => x.ProductTypeId == grainId && x.Supply == 0m && x.Demand == 1m);
-        prices.Should().Contain(x => x.ProductTypeId == breadId && x.Supply == 1.5m && x.Demand == 5m);
+        prices.Should().Contain(x => x.ProductTypeId == breadId && x.Supply == 0m && x.Demand == 5m);
     }
 
     [Fact]

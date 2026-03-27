@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<ISettlementRepository, SettlementRepository>();
         services.AddScoped<IPopulationGroupRepository, PopulationGroupRepository>();
         services.AddScoped<ISimulationJobRepository, SimulationJobRepository>();
+        services.AddScoped<IEconomicEventRepository, EconomicEventRepository>();
 
         return services;
     }

@@ -34,6 +34,7 @@ public class PopulationGroupsController : ControllerBase
             settlementId,
             request.Name,
             request.PopulationSize,
+            request.ReserveCoverageTicks,
             request.ConsumptionProfile);
 
         if (!result.IsSuccess)
@@ -52,6 +53,7 @@ public class PopulationGroupsController : ControllerBase
             id,
             request.Name,
             request.PopulationSize,
+            request.ReserveCoverageTicks,
             request.ConsumptionProfile);
 
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
@@ -68,4 +70,5 @@ public class PopulationGroupsController : ControllerBase
 public record CreatePopulationGroupRequest(
     string Name,
     int PopulationSize,
+    decimal ReserveCoverageTicks,
     IReadOnlyList<ConsumptionProfileItemDto> ConsumptionProfile);

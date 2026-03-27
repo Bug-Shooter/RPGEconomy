@@ -5,4 +5,6 @@ public record PopulationGroupDto(
     int SettlementId,
     string Name,
     int PopulationSize,
-    IReadOnlyList<ConsumptionProfileItemDto> ConsumptionProfile);
+    decimal ReserveCoverageTicks,
+    IReadOnlyList<ConsumptionProfileItemDto> ConsumptionProfile,
+    IReadOnlyList<ReserveStockItemDto> StockItems);
