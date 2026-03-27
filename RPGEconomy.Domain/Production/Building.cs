@@ -51,9 +51,12 @@ public class Building : AggregateRoot
         if (plannedBatchCount <= 0)
             return new Dictionary<int, decimal>();
 
-        return recipe.Inputs.ToDictionary(
-            input => input.ProductTypeId,
-            input => input.Quantity * plannedBatchCount);
+        return recipe.Inputs
+            .Where(input => input.Quantity > 0m)
+            .GroupBy(input => input.ProductTypeId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(input => input.Quantity) * plannedBatchCount);
     }
 
     public IReadOnlyDictionary<int, decimal> CalculateDesiredInputReserve(

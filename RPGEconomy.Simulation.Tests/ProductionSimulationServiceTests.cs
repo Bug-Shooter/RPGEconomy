@@ -118,6 +118,57 @@ public class ProductionSimulationServiceTests
         ctx.GetProductionDemand(10).Should().BeEmpty();
     }
 
+    [Fact]
+    public void RunTick_Should_Ignore_Legacy_Zero_Quantity_Inputs()
+    {
+        var warehouse = new Warehouse(1, 10);
+        var building = new Building(1, "Bakery", 10, 100, 2, true);
+        var ctx = CreateContext(
+            warehouse,
+            [building],
+            new Dictionary<int, ProductionRecipe>
+            {
+                [100] = CreatePersistedRecipe(
+                    100,
+                    "Bread",
+                    1,
+                    [new RecipeIngredient(1, 0m)],
+                    [new RecipeIngredient(2, 1m)])
+            });
+
+        var act = () => new ProductionSimulationService().RunTick(ctx);
+
+        act.Should().NotThrow();
+        warehouse.Items.Should().ContainSingle(x => x.ProductTypeId == 2 && x.Quantity == 2m);
+        ctx.GetProductionDemand(10).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RunTick_Should_Aggregate_Duplicate_Input_Product_Rows()
+    {
+        var warehouse = new Warehouse(1, 10);
+        warehouse.AddItem(1, 3m, QualityGrade.Normal);
+        var building = new Building(1, "Bakery", 10, 100, 2, true);
+        var ctx = CreateContext(
+            warehouse,
+            [building],
+            new Dictionary<int, ProductionRecipe>
+            {
+                [100] = CreatePersistedRecipe(
+                    100,
+                    "Bread",
+                    1,
+                    [new RecipeIngredient(1, 2m), new RecipeIngredient(1, 1m)],
+                    [new RecipeIngredient(2, 1m)])
+            });
+
+        new ProductionSimulationService().RunTick(ctx);
+
+        warehouse.Items.Should().ContainSingle(x => x.ProductTypeId == 2 && x.Quantity == 1m);
+        warehouse.Items.Should().NotContain(x => x.ProductTypeId == 1);
+        ctx.GetProductionDemand(10).Should().ContainSingle(x => x.Key == 1 && x.Value == 3m);
+    }
+
     private static SimulationContext CreateContext(
         Warehouse warehouse,
         IReadOnlyList<Building> buildings,
@@ -134,5 +185,20 @@ public class ProductionSimulationServiceTests
             new Dictionary<int, IReadOnlyList<Building>> { [settlement.Id] = buildings },
             recipes,
             new Dictionary<int, IReadOnlyList<EconomicEvent>>());
+    }
+
+    private static ProductionRecipe CreatePersistedRecipe(
+        int id,
+        string name,
+        double laborDaysRequired,
+        IReadOnlyList<RecipeIngredient> inputs,
+        IReadOnlyList<RecipeIngredient> outputs)
+    {
+        var recipe = new ProductionRecipe(id, name, laborDaysRequired);
+        var loadIngredients = typeof(ProductionRecipe).GetMethod("LoadIngredients", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        loadIngredients.Should().NotBeNull();
+
+        loadIngredients!.Invoke(recipe, [inputs, outputs]);
+        return recipe;
     }
 }

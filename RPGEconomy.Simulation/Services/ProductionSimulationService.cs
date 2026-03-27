@@ -22,14 +22,15 @@ public class ProductionSimulationService
                 var plannedBatches = building.BatchesPerDay(recipe.LaborDaysRequired);
                 if (plannedBatches <= 0) continue;
 
+                var normalizedInputs = NormalizeInputs(recipe);
                 var plannedBatchCount = (decimal)plannedBatches;
-                var actualBatchCount = CalculateActualBatchCount(building, warehouse, recipe, plannedBatchCount);
+                var actualBatchCount = CalculateActualBatchCount(building, warehouse, normalizedInputs, plannedBatchCount);
 
-                AddProductionDemand(ctx, settlement.Id, building, warehouse, recipe, plannedBatchCount);
+                AddProductionDemand(ctx, settlement.Id, building, warehouse, normalizedInputs, plannedBatchCount);
 
                 if (actualBatchCount <= 0m) continue;
 
-                foreach (var input in recipe.Inputs)
+                foreach (var input in normalizedInputs)
                 {
                     var requiredQuantity = input.Quantity * actualBatchCount;
                     var reserveQuantity = decimal.Min(building.GetInputReserveQuantity(input.ProductTypeId), requiredQuantity);
@@ -66,14 +67,14 @@ public class ProductionSimulationService
     private static decimal CalculateActualBatchCount(
         Building building,
         Warehouse warehouse,
-        ProductionRecipe recipe,
+        IReadOnlyList<RecipeIngredient> inputs,
         decimal plannedBatchCount)
     {
-        if (recipe.Inputs.Count == 0)
+        if (inputs.Count == 0)
             return plannedBatchCount;
 
         var actualBatchCount = plannedBatchCount;
-        foreach (var input in recipe.Inputs)
+        foreach (var input in inputs)
         {
             var availableQuantity =
                 building.GetInputReserveQuantity(input.ProductTypeId) +
@@ -90,13 +91,13 @@ public class ProductionSimulationService
         int settlementId,
         Building building,
         Warehouse warehouse,
-        ProductionRecipe recipe,
+        IReadOnlyList<RecipeIngredient> inputs,
         decimal plannedBatchCount)
     {
-        if (recipe.Inputs.Count == 0)
+        if (inputs.Count == 0)
             return;
 
-        foreach (var input in recipe.Inputs)
+        foreach (var input in inputs)
         {
             var requiredQuantity = input.Quantity * plannedBatchCount;
             var availableQuantity =
@@ -107,4 +108,11 @@ public class ProductionSimulationService
             ctx.AddProductionDemand(settlementId, input.ProductTypeId, missingQuantity);
         }
     }
+
+    private static IReadOnlyList<RecipeIngredient> NormalizeInputs(ProductionRecipe recipe) =>
+        recipe.Inputs
+            .Where(input => input.Quantity > 0m)
+            .GroupBy(input => input.ProductTypeId)
+            .Select(group => new RecipeIngredient(group.Key, group.Sum(input => input.Quantity)))
+            .ToArray();
 }
