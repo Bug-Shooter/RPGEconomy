@@ -4,6 +4,6 @@ public record MarketPriceDto(
     int ProductTypeId,
     string ProductName,
     decimal Price,
-    int Supply,
-    int Demand
+    decimal Supply,
+    decimal Demand
 );

@@ -30,8 +30,9 @@ public class DeleteAndTransactionTests
         await seed.AddInventoryItemAsync(warehouseId, 1, 3);
         var marketId = await seed.CreateMarketAsync(settlementId);
         await seed.AddMarketOfferAsync(marketId, 1, 10);
-        var recipeId = await seed.CreateRecipeAsync("Bread", 1, [], [(1, 1)]);
+        var recipeId = await seed.CreateRecipeAsync("Bread", 1, [], [(1, 1m)]);
         await seed.CreateBuildingAsync(settlementId, recipeId);
+        await seed.CreatePopulationGroupAsync(settlementId, "Peasants", 10, [(1, 0.2m)]);
 
         var repository = new SettlementRepository(new NpgsqlConnectionFactory(PostgresTestDatabase.ConnectionString));
         await repository.DeleteAsync(settlementId);
@@ -40,6 +41,7 @@ public class DeleteAndTransactionTests
         (await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM warehouses WHERE settlement_id = @settlementId", new { settlementId })).Should().Be(0);
         (await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM markets WHERE settlement_id = @settlementId", new { settlementId })).Should().Be(0);
         (await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM buildings WHERE settlement_id = @settlementId", new { settlementId })).Should().Be(0);
+        (await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM population_groups WHERE settlement_id = @settlementId", new { settlementId })).Should().Be(0);
     }
 
     [Fact]

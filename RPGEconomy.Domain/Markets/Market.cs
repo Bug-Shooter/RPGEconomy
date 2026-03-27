@@ -31,7 +31,7 @@ public class Market : AggregateRoot
         return Result.Success();
     }
 
-    public Result UpdateProductState(int productTypeId, int supply, int demand)
+    public Result UpdateProductState(int productTypeId, decimal supply, decimal demand)
     {
         var offer = _offers.FirstOrDefault(o => o.ProductTypeId == productTypeId);
         if (offer is null) return Result.Failure("Товар не найден на рынке");
@@ -39,7 +39,7 @@ public class Market : AggregateRoot
         return offer.UpdateState(supply, demand);
     }
 
-    public Result UpdateMarket(int productTypeId, int supply, int demand) =>
+    public Result UpdateMarket(int productTypeId, decimal supply, decimal demand) =>
         UpdateProductState(productTypeId, supply, demand);
 
     public MarketOffer? GetOffer(int productTypeId) =>

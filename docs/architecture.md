@@ -34,27 +34,29 @@ Project references:
 
 - `RPGEconomy.API` is the HTTP entry point with thin controller-based endpoints and middleware.
 - `RPGEconomy.Application` owns use-case orchestration, DTOs, repository abstractions, and simulation job lifecycle orchestration.
-- `RPGEconomy.Domain` owns entities, shared `Result` / `Result<T>`, market pricing rules, and core invariants.
+- `RPGEconomy.Domain` owns entities, shared `Result` / `Result<T>`, market pricing rules, population demand calculation, and core invariants.
 - `RPGEconomy.Infrastructure` owns Dapper repositories, SQL queries, migrations, database connection management, and simulation executor decorators.
-- `RPGEconomy.Simulation` owns the in-memory tick engine and simulation-side demand/production services.
+- `RPGEconomy.Simulation` owns the in-memory tick engine, production tick, and settlement-economy aggregation tick.
 
 ### Implemented domain scope
 
-The current codebase is broader than the original local-market-only draft. It already includes:
+The current codebase now implements an early **Stage 2** baseline:
 
 - worlds and settlements
 - warehouses and inventory items
 - product types
 - production recipes and buildings
+- population groups with consumption profiles
 - local markets with per-product prices, supply, and demand
 - synchronous simulation advancement with persisted simulation jobs
 - currencies and resource types as CRUD-capable foundational entities
 
-The current milestone should be understood as **Stage 1.5**:
+Important Stage 2 interpretation in this repository:
 
-- local market remains the central completed capability
-- minimal supply-side simulation already exists
-- warehouse, recipes, and buildings are accepted as foundation rather than treated as out-of-scope accidents
+- buildings are the practical producer layer for local supply
+- population groups are the demand layer
+- the market still receives only aggregated `supply` / `demand`
+- no separate `Producer` aggregate is introduced alongside buildings
 
 ### Request handling and API style
 
@@ -68,6 +70,7 @@ Important routes currently include:
 - `/api/worlds`
 - `/api/worlds/{worldId}/settlements`
 - `/api/settlements/{settlementId}/buildings`
+- `/api/settlements/{settlementId}/population-groups`
 - `/api/settlements/{settlementId}/market/prices`
 - `/api/settlements/{settlementId}/market/products`
 - `/api/settlements/{settlementId}/market/products/{productTypeId}`
@@ -78,13 +81,21 @@ Important routes currently include:
 - PostgreSQL with `Npgsql`
 - Dapper repositories with handwritten SQL query classes
 - DbUp-based startup migrations
-- aggregate-style persistence for warehouses and markets via explicit child-row replacement
+- aggregate-style persistence for warehouses, markets, recipes, and population-group profiles via explicit child-row replacement
 
 Money-related columns use `NUMERIC` in the database and `decimal` in code for:
 
 - market offer price
 - product base price
 - currency exchange rate to base
+
+Stage 2 also moves **economic quantities** to `decimal` / `NUMERIC` for:
+
+- warehouse inventory quantity
+- recipe ingredient quantity
+- market supply volume
+- market demand volume
+- consumption-per-person values inside population-group profiles
 
 Non-money continuous values still use `double` where appropriate, including:
 
@@ -117,14 +128,14 @@ The simulation runtime loads settlements and related aggregates once, runs ticks
 Current tick order:
 
 1. production tick
-2. market tick
+2. settlement-economy aggregation tick
 
-The market tick currently derives:
+The settlement-economy tick currently derives:
 
-- supply from warehouse stock
-- demand from a simulation-side population-based stub provider
+- supply from warehouse stock after building-based production
+- demand from `PopulationGroup` consumption profiles
 
-This keeps the market aggregate independent from the origin of demand while leaving room for future producer/population models.
+The market remains independent from why demand or supply changed. Buildings and population groups adapt into aggregate values before they reach the market.
 
 ### Validation and error handling
 
@@ -132,7 +143,7 @@ Validation is distributed across layers:
 
 - controllers validate simple request-shape rules
 - application services validate orchestration-level inputs and references
-- domain objects enforce stateful invariants such as duplicate market products, non-positive initial price, and negative supply/demand
+- domain objects enforce stateful invariants such as duplicate market products, non-positive initial price, duplicate consumption-profile items, and negative supply/demand
 
 Expected business errors use `Result` / `Result<T>`.
 Unexpected failures are handled by API middleware.
@@ -158,8 +169,7 @@ The broader economy vision still includes concepts such as:
 - states
 - regions
 - trade routes
-- population groups
-- producers
+- dedicated producer models beyond buildings
 - institutions and policies
 - economy zones
 - cross-settlement trade and richer macroeconomics
@@ -172,4 +182,4 @@ These concepts are **not implemented today** unless they are explicitly present 
 - validation is still imperative rather than centralized
 - market product names are resolved at application/query time instead of being embedded in the market aggregate
 - integration tests require a live PostgreSQL environment
-- current demand generation is intentionally simplistic and simulation-side
+- buildings currently serve as the producer abstraction for Stage 2, so a future richer producer model should adapt from them instead of bypassing the market boundary

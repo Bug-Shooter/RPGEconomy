@@ -47,8 +47,8 @@ public class MarketService : IMarketService
     public async Task<Result<MarketPriceDto>> UpdateProductStateAsync(
         int settlementId,
         int productTypeId,
-        int supply,
-        int demand)
+        decimal supply,
+        decimal demand)
     {
         var market = await _marketRepo.GetBySettlementIdAsync(settlementId);
         if (market is null)

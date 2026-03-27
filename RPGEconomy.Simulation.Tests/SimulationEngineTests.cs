@@ -2,6 +2,7 @@ using FluentAssertions;
 using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.DTOs;
 using RPGEconomy.Domain.Markets;
+using RPGEconomy.Domain.Population;
 using RPGEconomy.Domain.Production;
 using RPGEconomy.Domain.Resources;
 using RPGEconomy.Simulation.Engine;
@@ -21,6 +22,7 @@ public class SimulationEngineTests
             new SettlementRepositoryFake(),
             new WarehouseRepositoryFake(),
             new MarketRepositoryFake(),
+            new PopulationGroupRepositoryFake(),
             new BuildingRepositoryFake(),
             new RecipeRepositoryFake());
 
@@ -44,6 +46,8 @@ public class SimulationEngineTests
             new SettlementRepositoryFake(settlement),
             new WarehouseRepositoryFake(warehouse),
             new MarketRepositoryFake(market),
+            new PopulationGroupRepositoryFake(
+                PopulationGroup.Create(settlement.Id, "Peasants", 50, [(2, 0.1m)]).Value!),
             new BuildingRepositoryFake(new Building(40, "Bakery", settlement.Id, 100, 2, true)),
             new RecipeRepositoryFake((100, recipe)));
 
@@ -53,7 +57,12 @@ public class SimulationEngineTests
         result.Value!.Result.DaysBefore.Should().Be(3);
         result.Value.Result.DaysAfter.Should().Be(5);
         world.CurrentDay.Should().Be(5);
-        market.Offers.Should().ContainSingle(x => x.ProductTypeId == 2 && x.SupplyVolume == 0);
+        result.Value.Result.Settlements.Should().ContainSingle();
+        result.Value.Result.Settlements[0].Prices.Should().ContainSingle();
+        var price = result.Value.Result.Settlements[0].Prices[0];
+        price.ProductTypeId.Should().Be(2);
+        price.Supply.Should().Be(2m);
+        price.Demand.Should().Be(5m);
     }
 
     private static SimulationEngine CreateEngine(
@@ -61,6 +70,7 @@ public class SimulationEngineTests
         ISettlementRepository settlements,
         IWarehouseRepository warehouses,
         IMarketRepository markets,
+        IPopulationGroupRepository populationGroups,
         IBuildingRepository buildings,
         IProductionRecipeRepository recipes) =>
         new(
@@ -68,10 +78,11 @@ public class SimulationEngineTests
             settlements,
             warehouses,
             markets,
+            populationGroups,
             buildings,
             recipes,
             new ProductionSimulationService(),
-            new MarketSimulationService(new PopulationMarketDemandProvider()));
+            new SettlementEconomySimulationService());
 
     private sealed class WorldRepositoryFake : IWorldRepository
     {
@@ -156,6 +167,23 @@ public class SimulationEngineTests
         public Task DeleteAsync(int id) => Task.CompletedTask;
     }
 
+    private sealed class PopulationGroupRepositoryFake : IPopulationGroupRepository
+    {
+        private readonly IReadOnlyList<PopulationGroup> _items;
+
+        public PopulationGroupRepositoryFake(params PopulationGroup[] items)
+            => _items = items;
+
+        public Task<PopulationGroup?> GetByIdAsync(int id) => Task.FromResult(_items.FirstOrDefault(x => x.Id == id));
+
+        public Task<IReadOnlyList<PopulationGroup>> GetBySettlementIdAsync(int settlementId) =>
+            Task.FromResult((IReadOnlyList<PopulationGroup>)_items.Where(x => x.SettlementId == settlementId).ToList().AsReadOnly());
+
+        public Task<int> SaveAsync(PopulationGroup entity) => Task.FromResult(entity.Id);
+
+        public Task DeleteAsync(int id) => Task.CompletedTask;
+    }
+
     private sealed class RecipeRepositoryFake : IProductionRecipeRepository
     {
         private readonly Dictionary<int, ProductionRecipe> _items = [];
@@ -163,7 +191,15 @@ public class SimulationEngineTests
         public RecipeRepositoryFake(params (int Id, ProductionRecipe Recipe)[] items)
         {
             foreach (var (Id, Recipe) in items)
-                _items[Id] = Recipe;
+            {
+                var stored = new ProductionRecipe(Id, Recipe.Name, Recipe.LaborDaysRequired);
+                stored.Update(
+                    Recipe.Name,
+                    Recipe.LaborDaysRequired,
+                    Recipe.Inputs.Select(i => new RecipeIngredient(i.ProductTypeId, i.Quantity)),
+                    Recipe.Outputs.Select(o => new RecipeIngredient(o.ProductTypeId, o.Quantity)));
+                _items[Id] = stored;
+            }
         }
 
         public Task<ProductionRecipe?> GetByIdAsync(int id) => Task.FromResult(_items.GetValueOrDefault(id));

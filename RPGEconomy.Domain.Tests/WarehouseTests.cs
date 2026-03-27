@@ -54,4 +54,16 @@ public class WarehouseTests
 
         result.Should().BeFalse();
     }
+
+    [Fact]
+    public void AddItem_Should_Preserve_Fractional_Quantity()
+    {
+        var warehouse = Warehouse.Create(1);
+
+        warehouse.AddItem(10, 1.25m, QualityGrade.Normal);
+        warehouse.AddItem(10, 0.75m, QualityGrade.Normal);
+
+        warehouse.Items.Should().ContainSingle();
+        warehouse.Items[0].Quantity.Should().Be(2m);
+    }
 }

@@ -12,6 +12,7 @@
     <File Path="docs/adr/0006-shared-integration-test-database-serialization.md" />
     <File Path="docs/adr/0007-market-accepts-aggregated-supply-and-demand.md" />
     <File Path="docs/adr/0008-money-uses-decimal-in-code-and-numeric-in-postgresql.md" />
+    <File Path="docs/adr/0009-stage-2-population-demand-and-building-supply.md" />
   </Folder>
   <Folder Name="/docs/vision/">
     <File Path="docs/vision/rpgeconomy-layers.md" />

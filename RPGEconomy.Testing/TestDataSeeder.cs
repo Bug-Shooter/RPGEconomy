@@ -46,7 +46,7 @@ public sealed class TestDataSeeder
     public Task<int> AddInventoryItemAsync(
         int warehouseId,
         int productTypeId,
-        int quantity,
+        decimal quantity,
         string quality = "Normal") =>
         _connection.ExecuteScalarAsync<int>(
             """
@@ -69,8 +69,8 @@ public sealed class TestDataSeeder
         int marketId,
         int productTypeId,
         decimal currentPrice,
-        int supplyVolume = 0,
-        int demandVolume = 0) =>
+        decimal supplyVolume = 0,
+        decimal demandVolume = 0) =>
         _connection.ExecuteScalarAsync<int>(
             """
             INSERT INTO market_offers (market_id, product_type_id, current_price, supply_volume, demand_volume)
@@ -95,8 +95,8 @@ public sealed class TestDataSeeder
     public async Task<int> CreateRecipeAsync(
         string name,
         double laborDaysRequired,
-        IEnumerable<(int ProductTypeId, int Quantity)> inputs,
-        IEnumerable<(int ProductTypeId, int Quantity)> outputs)
+        IEnumerable<(int ProductTypeId, decimal Quantity)> inputs,
+        IEnumerable<(int ProductTypeId, decimal Quantity)> outputs)
     {
         var recipeId = await _connection.ExecuteScalarAsync<int>(
             """
@@ -142,4 +142,38 @@ public sealed class TestDataSeeder
             RETURNING id;
             """,
             new { name, settlementId, recipeId, workerCount, isActive });
+
+    public async Task<int> CreatePopulationGroupAsync(
+        int settlementId,
+        string name,
+        int populationSize,
+        IEnumerable<(int ProductTypeId, decimal AmountPerPersonPerTick)> consumptionProfile)
+    {
+        var populationGroupId = await _connection.ExecuteScalarAsync<int>(
+            """
+            INSERT INTO population_groups (settlement_id, name, population_size)
+            VALUES (@settlementId, @name, @populationSize)
+            RETURNING id;
+            """,
+            new { settlementId, name, populationSize });
+
+        foreach (var item in consumptionProfile)
+        {
+            await _connection.ExecuteAsync(
+                """
+                INSERT INTO population_group_consumption
+                    (population_group_id, product_type_id, amount_per_person_per_tick)
+                VALUES
+                    (@populationGroupId, @productTypeId, @amountPerPersonPerTick)
+                """,
+                new
+                {
+                    populationGroupId,
+                    productTypeId = item.ProductTypeId,
+                    amountPerPersonPerTick = item.AmountPerPersonPerTick
+                });
+        }
+
+        return populationGroupId;
+    }
 }

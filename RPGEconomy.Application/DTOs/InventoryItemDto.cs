@@ -3,6 +3,6 @@
 public record InventoryItemDto(
     int ProductTypeId,
     string ProductName,
-    int Quantity,
+    decimal Quantity,
     string Quality
 );

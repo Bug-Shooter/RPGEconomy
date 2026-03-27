@@ -2,6 +2,7 @@ using FluentAssertions;
 using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.Services;
 using RPGEconomy.Domain.Markets;
+using RPGEconomy.Domain.Population;
 using RPGEconomy.Domain.Production;
 using RPGEconomy.Domain.Resources;
 using RPGEconomy.Domain.World;
@@ -18,7 +19,7 @@ public class SettlementServiceTests
         var worldRepo = new WorldRepositoryFake(WorldEntity.Create("World", "Desc"), 1);
         var warehouseRepo = new WarehouseRepositoryFake();
         var marketRepo = new MarketRepositoryFake();
-        var service = new SettlementService(settlementRepo, worldRepo, warehouseRepo, marketRepo);
+        var service = new SettlementService(settlementRepo, worldRepo, warehouseRepo, marketRepo, new PopulationGroupRepositoryFake());
 
         var result = await service.CreateAsync(1, "Town", 150);
 
@@ -35,7 +36,8 @@ public class SettlementServiceTests
             new SettlementRepositoryFake(),
             new WorldRepositoryFake(),
             new WarehouseRepositoryFake(),
-            new MarketRepositoryFake());
+            new MarketRepositoryFake(),
+            new PopulationGroupRepositoryFake());
 
         var result = await service.CreateAsync(999, "Town", 150);
 
@@ -55,13 +57,30 @@ public class SettlementServiceTests
         market.RegisterProduct(10, 12.5m);
         market.UpdateProductState(10, 7, 10);
         var marketRepo = new MarketRepositoryFake(market);
-        var service = new SettlementService(settlementRepo, worldRepo, warehouseRepo, marketRepo);
+        var service = new SettlementService(settlementRepo, worldRepo, warehouseRepo, marketRepo, new PopulationGroupRepositoryFake());
 
         var result = await service.GetByIdAsync(settlement.Id);
 
         result.IsSuccess.Should().BeTrue();
         result.Value!.Warehouse.Should().ContainSingle(x => x.ProductTypeId == 10 && x.Quantity == 7);
         result.Value.Prices.Should().ContainSingle(x => x.ProductTypeId == 10);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_Should_Reject_Direct_Population_Change_When_Groups_Exist()
+    {
+        var settlement = new Settlement(5, 1, "Town", 200);
+        var service = new SettlementService(
+            new SettlementRepositoryFake(settlement),
+            new WorldRepositoryFake(WorldEntity.Create("World", "Desc"), 1),
+            new WarehouseRepositoryFake(),
+            new MarketRepositoryFake(),
+            new PopulationGroupRepositoryFake(
+                PopulationGroup.Create(settlement.Id, "Peasants", 200, []).Value!));
+
+        var result = await service.UpdateAsync(settlement.Id, "Town", 201);
+
+        result.IsSuccess.Should().BeFalse();
     }
 
     private sealed class WorldRepositoryFake : IWorldRepository
@@ -212,6 +231,39 @@ public class SettlementServiceTests
         {
             var market = BySettlementId.Values.First(x => x.Id == id);
             BySettlementId.Remove(market.SettlementId);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class PopulationGroupRepositoryFake : IPopulationGroupRepository
+    {
+        private readonly Dictionary<int, PopulationGroup> _items = [];
+        private int _nextId = 1;
+
+        public PopulationGroupRepositoryFake(params PopulationGroup[] groups)
+        {
+            foreach (var group in groups)
+            {
+                _items[group.Id == 0 ? _nextId++ : group.Id] = group;
+                _nextId = Math.Max(_nextId, group.Id + 1);
+            }
+        }
+
+        public Task<PopulationGroup?> GetByIdAsync(int id) => Task.FromResult(_items.GetValueOrDefault(id));
+
+        public Task<IReadOnlyList<PopulationGroup>> GetBySettlementIdAsync(int settlementId) =>
+            Task.FromResult((IReadOnlyList<PopulationGroup>)_items.Values.Where(x => x.SettlementId == settlementId).ToList().AsReadOnly());
+
+        public Task<int> SaveAsync(PopulationGroup entity)
+        {
+            var id = entity.Id == 0 ? _nextId++ : entity.Id;
+            _items[id] = entity;
+            return Task.FromResult(id);
+        }
+
+        public Task DeleteAsync(int id)
+        {
+            _items.Remove(id);
             return Task.CompletedTask;
         }
     }

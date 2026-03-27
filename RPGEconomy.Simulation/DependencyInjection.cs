@@ -11,8 +11,7 @@ public static class DependencyInjection
     {
         services.AddScoped<ISimulationExecutor, SimulationEngine>();
         services.AddScoped<ProductionSimulationService>();
-        services.AddScoped<PopulationMarketDemandProvider>();
-        services.AddScoped<MarketSimulationService>();
+        services.AddScoped<SettlementEconomySimulationService>();
 
         return services;
     }

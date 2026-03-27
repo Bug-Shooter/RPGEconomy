@@ -14,17 +14,20 @@ public class SettlementService : ISettlementService
     private readonly IWorldRepository _worldRepo;
     private readonly IWarehouseRepository _warehouseRepo;
     private readonly IMarketRepository _marketRepo;
+    private readonly IPopulationGroupRepository _populationGroupRepo;
 
     public SettlementService(
         ISettlementRepository settlementRepo,
         IWorldRepository worldRepo,
         IWarehouseRepository warehouseRepo,
-        IMarketRepository marketRepo)
+        IMarketRepository marketRepo,
+        IPopulationGroupRepository populationGroupRepo)
     {
         _settlementRepo = settlementRepo;
         _worldRepo = worldRepo;
         _warehouseRepo = warehouseRepo;
         _marketRepo = marketRepo;
+        _populationGroupRepo = populationGroupRepo;
     }
 
     public async Task<Result<SettlementSummaryDto>> CreateAsync(
@@ -33,8 +36,8 @@ public class SettlementService : ISettlementService
         if (string.IsNullOrWhiteSpace(name))
             return Result<SettlementSummaryDto>.Failure("Название поселения не может быть пустым");
 
-        if (population <= 0)
-            return Result<SettlementSummaryDto>.Failure("Население должно быть больше нуля");
+        if (population < 0)
+            return Result<SettlementSummaryDto>.Failure("Население не может быть отрицательным");
 
         var world = await _worldRepo.GetByIdAsync(worldId);
         if (world is null)
@@ -99,12 +102,19 @@ public class SettlementService : ISettlementService
         if (string.IsNullOrWhiteSpace(name))
             return Result<SettlementSummaryDto>.Failure("Название поселения не может быть пустым");
 
-        if (population <= 0)
-            return Result<SettlementSummaryDto>.Failure("Население должно быть больше нуля");
+        if (population < 0)
+            return Result<SettlementSummaryDto>.Failure("Население не может быть отрицательным");
 
         var settlement = await _settlementRepo.GetByIdAsync(id);
         if (settlement is null)
             return Result<SettlementSummaryDto>.Failure($"Поселение с Id {id} не найдено");
+
+        var populationGroups = await _populationGroupRepo.GetBySettlementIdAsync(id);
+        if (populationGroups.Count > 0 && population != settlement.Population)
+        {
+            return Result<SettlementSummaryDto>.Failure(
+                "Нельзя изменять население поселения напрямую, пока заданы группы населения");
+        }
 
         settlement.Update(name, population);
         await _settlementRepo.SaveAsync(settlement);

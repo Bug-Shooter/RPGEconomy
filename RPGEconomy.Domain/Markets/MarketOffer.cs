@@ -7,12 +7,12 @@ public class MarketOffer : Entity
     public int MarketId { get; private set; }
     public int ProductTypeId { get; private set; }
     public decimal CurrentPrice { get; private set; }
-    public int SupplyVolume { get; private set; }
-    public int DemandVolume { get; private set; }
+    public decimal SupplyVolume { get; private set; }
+    public decimal DemandVolume { get; private set; }
 
     // Dapper
     public MarketOffer(int id, int marketId, int productTypeId,
-        decimal currentPrice, int supplyVolume, int demandVolume) : base(id)
+        decimal currentPrice, decimal supplyVolume, decimal demandVolume) : base(id)
     {
         MarketId = marketId;
         ProductTypeId = productTypeId;
@@ -30,7 +30,7 @@ public class MarketOffer : Entity
             new MarketOffer(0, marketId, productTypeId, initialPrice, 0, 0));
     }
 
-    internal Result UpdateState(int supply, int demand)
+    internal Result UpdateState(decimal supply, decimal demand)
     {
         if (supply < 0)
             return Result.Failure("Предложение не может быть отрицательным");

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using RPGEconomy.Domain.Markets;
+using RPGEconomy.Domain.Population;
 using RPGEconomy.Domain.Production;
 using RPGEconomy.Domain.Resources;
 using RPGEconomy.Domain.World;
@@ -62,6 +63,7 @@ public class ProductionSimulationServiceTests
             [settlement],
             new Dictionary<int, Warehouse> { [settlement.Id] = warehouse },
             new Dictionary<int, Market> { [settlement.Id] = new Market(2, settlement.Id) },
+            new Dictionary<int, IReadOnlyList<PopulationGroup>>(),
             new Dictionary<int, IReadOnlyList<Building>> { [settlement.Id] = buildings },
             new Dictionary<int, ProductionRecipe> { [100] = recipe });
     }

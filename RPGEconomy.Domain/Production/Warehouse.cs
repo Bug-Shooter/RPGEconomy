@@ -19,9 +19,9 @@ public class Warehouse : AggregateRoot
     public static Warehouse Create(int settlementId)
         => new(0, settlementId);
 
-    public Result AddItem(int productTypeId, int quantity, QualityGrade quality)
+    public Result AddItem(int productTypeId, decimal quantity, QualityGrade quality)
     {
-        if (quantity <= 0) return Result.Failure("Количество должно быть больше нуля");
+        if (quantity <= 0m) return Result.Failure("Количество должно быть больше нуля");
 
         var existing = _items.FirstOrDefault(i =>
             i.ProductTypeId == productTypeId && i.Quality == quality.Name);
@@ -34,7 +34,7 @@ public class Warehouse : AggregateRoot
         return Result.Success();
     }
 
-    public Result Withdraw(int productTypeId, int quantity, QualityGrade quality)
+    public Result Withdraw(int productTypeId, decimal quantity, QualityGrade quality)
     {
         var item = _items.FirstOrDefault(i =>
             i.ProductTypeId == productTypeId && i.Quality == quality.Name);
@@ -43,7 +43,7 @@ public class Warehouse : AggregateRoot
             return Result.Failure("Недостаточно товара на складе");
 
         item.DecreaseQuantity(quantity);
-        if (item.Quantity == 0) _items.Remove(item);
+        if (item.Quantity == 0m) _items.Remove(item);
 
         return Result.Success();
     }

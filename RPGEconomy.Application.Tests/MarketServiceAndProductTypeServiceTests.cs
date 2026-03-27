@@ -44,11 +44,11 @@ public class MarketServiceAndProductTypeServiceTests
         var productRepo = new ProductTypeRepositoryFake(new ProductType(1, "Bread", "Desc", 10m, 1));
         var service = new MarketService(marketRepo, productRepo);
 
-        var result = await service.UpdateProductStateAsync(1, 1, 5, 9);
+        var result = await service.UpdateProductStateAsync(1, 1, 5m, 9m);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value!.Supply.Should().Be(5);
-        result.Value.Demand.Should().Be(9);
+        result.Value!.Supply.Should().Be(5m);
+        result.Value.Demand.Should().Be(9m);
         result.Value.ProductName.Should().Be("Bread");
     }
 
@@ -71,6 +71,7 @@ public class MarketServiceAndProductTypeServiceTests
             => Stored = stored;
 
         public Task<Market?> GetByIdAsync(int id) => Task.FromResult(Stored.Id == id ? Stored : null);
+
         public Task<Market?> GetBySettlementIdAsync(int settlementId) =>
             Task.FromResult(Stored.SettlementId == settlementId ? Stored : null);
 
@@ -85,7 +86,7 @@ public class MarketServiceAndProductTypeServiceTests
 
     private sealed class ProductTypeRepositoryFake : IProductTypeRepository
     {
-        private readonly Dictionary<int, ProductType> _items = new();
+        private readonly Dictionary<int, ProductType> _items = [];
 
         public ProductTypeRepositoryFake(params ProductType[] items)
         {
@@ -94,10 +95,13 @@ public class MarketServiceAndProductTypeServiceTests
         }
 
         public Task<ProductType?> GetByIdAsync(int id) => Task.FromResult(_items.GetValueOrDefault(id));
+
         public Task<IReadOnlyList<ProductType>> GetAllAsync() =>
             Task.FromResult((IReadOnlyList<ProductType>)_items.Values.ToList().AsReadOnly());
+
         public Task<ProductType?> GetByNameAsync(string name) =>
             Task.FromResult(_items.Values.FirstOrDefault(x => x.Name == name));
+
         public Task<int> SaveAsync(ProductType entity)
         {
             _items[entity.Id == 0 ? 1 : entity.Id] = entity;

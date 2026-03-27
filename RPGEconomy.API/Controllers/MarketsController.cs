@@ -72,7 +72,7 @@ public class MarketsController : ControllerBase
 }
 
 public record RegisterProductRequest(int ProductTypeId, decimal InitialPrice);
-public record UpdateMarketProductRequest(int Supply, int Demand);
+public record UpdateMarketProductRequest(decimal Supply, decimal Demand);
 
 static class MarketsControllerResultExtensions
 {

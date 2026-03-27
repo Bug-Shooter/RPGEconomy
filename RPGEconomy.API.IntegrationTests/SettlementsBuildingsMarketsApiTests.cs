@@ -21,7 +21,7 @@ public class SettlementsBuildingsMarketsApiTests : IAsyncLifetime
         var seed = new TestDataSeeder(connection);
         var worldId = await seed.CreateWorldAsync();
         var productId = await seed.CreateProductTypeAsync("Bread", "Desc", 10m, 1);
-        var recipeId = await seed.CreateRecipeAsync("Bakery", 1, [], [(productId, 1)]);
+        var recipeId = await seed.CreateRecipeAsync("Bakery", 1, [], [(productId, 1m)]);
 
         var settlementResponse = await client.PostAsJsonAsync($"/api/worlds/{worldId}/settlements", new { name = "Town", population = 200 }, cancellationToken: TestContext.Current.CancellationToken);
         settlementResponse.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -103,5 +103,5 @@ public class SettlementsBuildingsMarketsApiTests : IAsyncLifetime
 
     private sealed record SettlementResponse(int SettlementId, string Name, int Population, IReadOnlyList<object> Warehouse, IReadOnlyList<object> Prices);
     private sealed record BuildingResponse(int Id, string Name, int SettlementId, int RecipeId, int WorkerCount, bool IsActive);
-    private sealed record MarketPriceResponse(int ProductTypeId, string ProductName, decimal Price, int Supply, int Demand);
+    private sealed record MarketPriceResponse(int ProductTypeId, string ProductName, decimal Price, decimal Supply, decimal Demand);
 }

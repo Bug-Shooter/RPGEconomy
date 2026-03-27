@@ -2,4 +2,4 @@
 
 public record RecipeIngredientDto(
     int ProductTypeId,
-    int Quantity);
+    decimal Quantity);

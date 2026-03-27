@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IWarehouseRepository, WarehouseRepository>();
         services.AddScoped<IMarketRepository, MarketRepository>();
         services.AddScoped<ISettlementRepository, SettlementRepository>();
+        services.AddScoped<IPopulationGroupRepository, PopulationGroupRepository>();
         services.AddScoped<ISimulationJobRepository, SimulationJobRepository>();
 
         return services;
