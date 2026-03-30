@@ -147,14 +147,7 @@ public class SettlementService : ISettlementService
     private static IReadOnlyList<InventoryItemDto> MapInventory(
         Warehouse warehouse,
         IReadOnlyDictionary<int, string> productNames) =>
-        warehouse.Items
-            .Select(item => new InventoryItemDto(
-                item.ProductTypeId,
-                ResolveProductName(productNames, item.ProductTypeId),
-                item.Quantity,
-                item.Quality))
-            .ToList()
-            .AsReadOnly();
+        InventoryItemMappings.Map(warehouse.Items, productNames);
 
     private static IReadOnlyList<MarketPriceDto> MapPrices(
         Market market,

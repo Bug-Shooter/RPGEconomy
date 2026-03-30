@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Domain.Common;
+using RPGEconomy.Domain.Common;
 using RPGEconomy.Domain.Resources;
 
 namespace RPGEconomy.Domain.Production;
@@ -28,4 +28,5 @@ public class InventoryItem : Entity
 
     internal void IncreaseQuantity(decimal amount) => Quantity += amount;
     internal void DecreaseQuantity(decimal amount) => Quantity -= amount;
+    internal void SetQuantity(decimal amount) => Quantity = amount;
 }

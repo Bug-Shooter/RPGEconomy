@@ -53,6 +53,32 @@ public class Warehouse : AggregateRoot
         return Result.Success();
     }
 
+    public Result SetItemQuantity(int productTypeId, decimal quantity, QualityGrade quality)
+    {
+        if (quantity < 0m)
+            return Result.Failure("Количество не может быть отрицательным");
+
+        var existing = _items.FirstOrDefault(i =>
+            i.ProductTypeId == productTypeId && i.Quality == quality.Name);
+
+        if (quantity == 0m)
+        {
+            if (existing is not null)
+                _items.Remove(existing);
+
+            return Result.Success();
+        }
+
+        if (existing is null)
+        {
+            _items.Add(InventoryItem.Create(Id, productTypeId, quantity, quality));
+            return Result.Success();
+        }
+
+        existing.SetQuantity(quantity);
+        return Result.Success();
+    }
+
     public bool CanFulfill(IEnumerable<RecipeIngredient> ingredients) =>
         ingredients.All(ingredient =>
             _items.Any(item =>

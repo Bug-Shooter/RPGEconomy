@@ -139,7 +139,102 @@ public class SettlementsBuildingsMarketsApiTests : IAsyncLifetime
         refreshed!.Population.Should().Be(75);
     }
 
-    private sealed record SettlementResponse(int SettlementId, string Name, int Population, IReadOnlyList<object> Warehouse, IReadOnlyList<object> Prices);
+    [Fact]
+    public async Task Warehouse_Endpoints_Should_Get_And_Upsert_Stock()
+    {
+        var client = _factory.CreateClient();
+        await using var connection = await PostgresTestDatabase.OpenConnectionAsync();
+        var seed = new TestDataSeeder(connection);
+        var worldId = await seed.CreateWorldAsync();
+        var breadId = await seed.CreateProductTypeAsync("Bread", "Food", 10m, 1);
+
+        var settlementResponse = await client.PostAsJsonAsync(
+            $"/api/worlds/{worldId}/settlements",
+            new { name = "Town" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        settlementResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var settlement = await settlementResponse.Content.ReadFromJsonAsync<SettlementResponse>(cancellationToken: TestContext.Current.CancellationToken);
+        settlement.Should().NotBeNull();
+
+        var getEmptyResponse = await client.GetAsync(
+            $"/api/settlements/{settlement!.SettlementId}/warehouse",
+            TestContext.Current.CancellationToken);
+        getEmptyResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var emptyWarehouse = await getEmptyResponse.Content.ReadFromJsonAsync<List<InventoryItemResponse>>(cancellationToken: TestContext.Current.CancellationToken);
+        emptyWarehouse.Should().BeEmpty();
+
+        var createItemResponse = await client.PutAsJsonAsync(
+            $"/api/settlements/{settlement.SettlementId}/warehouse/items",
+            new { productTypeId = breadId, quantity = 5m, quality = "Normal" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        createItemResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var createdWarehouse = await createItemResponse.Content.ReadFromJsonAsync<List<InventoryItemResponse>>(cancellationToken: TestContext.Current.CancellationToken);
+        createdWarehouse.Should().ContainSingle(item =>
+            item.ProductTypeId == breadId &&
+            item.Quantity == 5m &&
+            item.Quality == "Normal");
+
+        var updateItemResponse = await client.PutAsJsonAsync(
+            $"/api/settlements/{settlement.SettlementId}/warehouse/items",
+            new { productTypeId = breadId, quantity = 8m, quality = "Normal" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        updateItemResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updatedWarehouse = await updateItemResponse.Content.ReadFromJsonAsync<List<InventoryItemResponse>>(cancellationToken: TestContext.Current.CancellationToken);
+        updatedWarehouse.Should().ContainSingle(item => item.ProductTypeId == breadId && item.Quantity == 8m);
+
+        var removeItemResponse = await client.PutAsJsonAsync(
+            $"/api/settlements/{settlement.SettlementId}/warehouse/items",
+            new { productTypeId = breadId, quantity = 0m, quality = "Normal" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        removeItemResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var warehouseAfterRemoval = await removeItemResponse.Content.ReadFromJsonAsync<List<InventoryItemResponse>>(cancellationToken: TestContext.Current.CancellationToken);
+        warehouseAfterRemoval.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Warehouse_Endpoints_Should_Return_Expected_Status_Codes_For_Invalid_Input_And_Missing_Entities()
+    {
+        var client = _factory.CreateClient();
+        await using var connection = await PostgresTestDatabase.OpenConnectionAsync();
+        var seed = new TestDataSeeder(connection);
+        var worldId = await seed.CreateWorldAsync();
+        var breadId = await seed.CreateProductTypeAsync("Bread", "Food", 10m, 1);
+
+        var settlementResponse = await client.PostAsJsonAsync(
+            $"/api/worlds/{worldId}/settlements",
+            new { name = "Town" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        settlementResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var settlement = await settlementResponse.Content.ReadFromJsonAsync<SettlementResponse>(cancellationToken: TestContext.Current.CancellationToken);
+        settlement.Should().NotBeNull();
+
+        var invalidQuantityResponse = await client.PutAsJsonAsync(
+            $"/api/settlements/{settlement!.SettlementId}/warehouse/items",
+            new { productTypeId = breadId, quantity = -1m, quality = "Normal" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        invalidQuantityResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidQualityResponse = await client.PutAsJsonAsync(
+            $"/api/settlements/{settlement.SettlementId}/warehouse/items",
+            new { productTypeId = breadId, quantity = 1m, quality = "Legendary" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        invalidQualityResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var missingSettlementResponse = await client.PutAsJsonAsync(
+            "/api/settlements/999/warehouse/items",
+            new { productTypeId = breadId, quantity = 1m, quality = "Normal" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        missingSettlementResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var missingProductResponse = await client.PutAsJsonAsync(
+            $"/api/settlements/{settlement.SettlementId}/warehouse/items",
+            new { productTypeId = 999, quantity = 1m, quality = "Normal" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        missingProductResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    private sealed record SettlementResponse(int SettlementId, string Name, int Population, IReadOnlyList<InventoryItemResponse> Warehouse, IReadOnlyList<object> Prices);
     private sealed record BuildingResponse(int Id, string Name, int SettlementId, int RecipeId, int WorkerCount, bool IsActive);
     private sealed record MarketPriceResponse(int ProductTypeId, string ProductName, decimal Price, decimal Supply, decimal Demand);
+    private sealed record InventoryItemResponse(int ProductTypeId, string ProductName, decimal Quantity, string Quality);
 }
