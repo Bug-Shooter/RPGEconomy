@@ -190,6 +190,12 @@ public class RecipeServiceTests
             return Task.CompletedTask;
         }
 
+        private IReadOnlyList<ProductionRecipe> GetAll()
+        {
+            GetAllCalls++;
+            return Stored.Values.ToList().AsReadOnly();
+        }
+
         private static ProductionRecipe Clone(int id, ProductionRecipe entity)
         {
             var clone = new ProductionRecipe(id, entity.Name, entity.LaborDaysRequired);
@@ -239,11 +245,5 @@ public class RecipeServiceTests
         }
 
         public Task<bool> IsInUseAsync(int id) => Task.FromResult(false);
-
-        private IReadOnlyList<ProductionRecipe> GetAll()
-        {
-            GetAllCalls++;
-            return Stored.Values.ToList().AsReadOnly();
-        }
     }
 }

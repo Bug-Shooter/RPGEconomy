@@ -79,8 +79,9 @@ public class SearchRepositoryTests
 
         var results = await repository.SearchByNameAsync("bakery");
 
-        results.Select(x => x.Name).Should().Equal("Bakery", "Bakery A", "Bakery B");
+        results.Select(x => x.Name).First().Should().Be("Bakery");
+        results.Select(x => x.Name).Should().BeEquivalentTo(["Bakery", "Bakery A", "Bakery B"]);
         results.Should().OnlyContain(x => x.Inputs.Count == 1 && x.Outputs.Count == 1);
-        results.Select(x => x.Inputs.Single().Quantity).Should().Equal(1m, 2m, 3m);
+        results.Select(x => x.Inputs.Single().Quantity).Should().BeEquivalentTo([1m, 2m, 3m]);
     }
 }
