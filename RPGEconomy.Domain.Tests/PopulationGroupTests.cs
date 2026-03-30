@@ -15,7 +15,7 @@ public class PopulationGroupTests
             [(10, 0.05m), (11, 1.2m)]);
 
         result.IsSuccess.Should().BeTrue();
-        var demand = result.Value!.CalculateDemand();
+        var demand = result.Value!.CalculateConsumptionDemand();
         demand[10].Should().Be(2.50m);
         demand[11].Should().Be(60m);
     }

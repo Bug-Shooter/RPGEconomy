@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Application.Abstractions.Repositories;
+using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.Abstractions.Services;
 using RPGEconomy.Application.DTOs;
 using RPGEconomy.Domain.Common;
@@ -29,33 +29,35 @@ public class ResourceTypeService : IResourceTypeService
     }
 
     public async Task<Result<ResourceTypeDto>> CreateAsync(
-        string name, string description, bool isRenewable, double regenerationRatePerDay)
+        string name,
+        string description,
+        bool isRenewable,
+        double regenerationRatePerDay)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return Result<ResourceTypeDto>.Failure("Название ресурса не может быть пустым");
+        var createResult = ResourceType.Create(name, description, isRenewable, regenerationRatePerDay);
+        if (!createResult.IsSuccess)
+            return Result<ResourceTypeDto>.Failure(createResult.Error!);
 
-        if (regenerationRatePerDay < 0)
-            return Result<ResourceTypeDto>.Failure("Скорость восстановления не может быть отрицательной");
-
-        var resource = ResourceType.Create(name, description, isRenewable, regenerationRatePerDay);
+        var resource = createResult.Value!;
         var id = await _repo.SaveAsync(resource);
         return Result<ResourceTypeDto>.Success(ToDto(resource) with { Id = id });
     }
 
     public async Task<Result<ResourceTypeDto>> UpdateAsync(
-        int id, string name, string description, bool isRenewable, double regenerationRatePerDay)
+        int id,
+        string name,
+        string description,
+        bool isRenewable,
+        double regenerationRatePerDay)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return Result<ResourceTypeDto>.Failure("Название ресурса не может быть пустым");
-
-        if (regenerationRatePerDay < 0)
-            return Result<ResourceTypeDto>.Failure("Скорость восстановления не может быть отрицательной");
-
         var resource = await _repo.GetByIdAsync(id);
         if (resource is null)
             return Result<ResourceTypeDto>.Failure($"Тип ресурса с Id {id} не найден");
 
-        resource.Update(name, description, isRenewable, regenerationRatePerDay);
+        var updateResult = resource.Update(name, description, isRenewable, regenerationRatePerDay);
+        if (!updateResult.IsSuccess)
+            return Result<ResourceTypeDto>.Failure(updateResult.Error!);
+
         await _repo.SaveAsync(resource);
         return Result<ResourceTypeDto>.Success(ToDto(resource));
     }
@@ -70,6 +72,6 @@ public class ResourceTypeService : IResourceTypeService
         return Result.Success();
     }
 
-    private static ResourceTypeDto ToDto(ResourceType r) =>
-        new(r.Id, r.Name, r.Description, r.IsRenewable, r.RegenerationRatePerDay);
+    private static ResourceTypeDto ToDto(ResourceType resource) =>
+        new(resource.Id, resource.Name, resource.Description, resource.IsRenewable, resource.RegenerationRatePerDay);
 }

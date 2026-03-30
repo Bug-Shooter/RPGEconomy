@@ -3,6 +3,7 @@ using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Domain.World;
 using RPGEconomy.Infrastructure.Persistence.Queries;
 using System.Data;
+using System.Transactions;
 
 namespace RPGEconomy.Infrastructure.Persistence.Repositories;
 
@@ -16,15 +17,13 @@ public class SettlementRepository : ISettlementRepository
     public async Task<Settlement?> GetByIdAsync(int id)
     {
         using var conn = _factory.Create();
-        return await conn.QueryFirstOrDefaultAsync<Settlement>(
-            SettlementQueries.GetById, new { Id = id });
+        return await conn.QueryFirstOrDefaultAsync<Settlement>(SettlementQueries.GetById, new { Id = id });
     }
 
     public async Task<IReadOnlyList<Settlement>> GetByWorldIdAsync(int worldId)
     {
         using var conn = _factory.Create();
-        var result = await conn.QueryAsync<Settlement>(
-            SettlementQueries.GetByWorldId, new { WorldId = worldId });
+        var result = await conn.QueryAsync<Settlement>(SettlementQueries.GetByWorldId, new { WorldId = worldId });
         return result.ToList().AsReadOnly();
     }
 
@@ -33,20 +32,23 @@ public class SettlementRepository : ISettlementRepository
         using var conn = _factory.Create();
 
         if (settlement.IsNew)
+        {
             return await conn.ExecuteScalarAsync<int>(
-                SettlementQueries.Insert, new
+                SettlementQueries.Insert,
+                new
                 {
                     settlement.WorldId,
-                    settlement.Name,
-                    settlement.Population
+                    settlement.Name
                 });
+        }
 
-        await conn.ExecuteAsync(SettlementQueries.Update, new
-        {
-            settlement.Id,
-            settlement.Name,
-            settlement.Population
-        });
+        await conn.ExecuteAsync(
+            SettlementQueries.Update,
+            new
+            {
+                settlement.Id,
+                settlement.Name
+            });
         return settlement.Id;
     }
 
@@ -56,8 +58,9 @@ public class SettlementRepository : ISettlementRepository
         if (conn.State != ConnectionState.Open)
             conn.Open();
 
-        using var tx = conn.BeginTransaction();
+        var useLocalTransaction = Transaction.Current is null;
+        using var tx = useLocalTransaction ? conn.BeginTransaction() : null;
         await conn.ExecuteAsync(SettlementQueries.Delete, new { Id = id }, tx);
-        tx.Commit();
+        tx?.Commit();
     }
 }

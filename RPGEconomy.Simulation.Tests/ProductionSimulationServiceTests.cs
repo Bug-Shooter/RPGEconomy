@@ -174,7 +174,7 @@ public class ProductionSimulationServiceTests
         IReadOnlyList<Building> buildings,
         IReadOnlyDictionary<int, ProductionRecipe> recipes)
     {
-        var settlement = new Settlement(10, 1, "Town", 100);
+        var settlement = new Settlement(10, 1, "Town");
         return new SimulationContext(
             1,
             0,

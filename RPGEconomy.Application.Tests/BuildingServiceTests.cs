@@ -13,7 +13,7 @@ public class BuildingServiceTests
     {
         var service = new BuildingService(
             new BuildingRepositoryFake(),
-            new SettlementRepositoryFake(new Settlement(1, 1, "Town", 100)),
+            new SettlementRepositoryFake(new Settlement(1, 1, "Town")),
             new RecipeRepositoryFake(
                 ProductionRecipe.Create("Bread", 1, [], [new RecipeIngredient(2, 1)]).Value!));
 

@@ -26,7 +26,7 @@ public class PopulationGroupService : IPopulationGroupService
     {
         var settlement = await _settlementRepo.GetByIdAsync(settlementId);
         if (settlement is null)
-            return Result<IReadOnlyList<PopulationGroupDto>>.Failure($"Settlement with Id {settlementId} was not found");
+            return Result<IReadOnlyList<PopulationGroupDto>>.Failure($"Поселение с Id {settlementId} не найдено");
 
         var groups = await _populationGroupRepo.GetBySettlementIdAsync(settlementId);
         return Result<IReadOnlyList<PopulationGroupDto>>.Success(groups.Select(ToDto).ToList().AsReadOnly());
@@ -36,7 +36,7 @@ public class PopulationGroupService : IPopulationGroupService
     {
         var group = await _populationGroupRepo.GetByIdAsync(id);
         if (group is null)
-            return Result<PopulationGroupDto>.Failure($"Population group with Id {id} was not found");
+            return Result<PopulationGroupDto>.Failure($"Группа населения с Id {id} не найдена");
 
         return Result<PopulationGroupDto>.Success(ToDto(group));
     }
@@ -50,7 +50,7 @@ public class PopulationGroupService : IPopulationGroupService
     {
         var settlement = await _settlementRepo.GetByIdAsync(settlementId);
         if (settlement is null)
-            return Result<PopulationGroupDto>.Failure($"Settlement with Id {settlementId} was not found");
+            return Result<PopulationGroupDto>.Failure($"Поселение с Id {settlementId} не найдено");
 
         var validation = await ValidateProductTypesAsync(consumptionProfile);
         if (!validation.IsSuccess)
@@ -62,15 +62,12 @@ public class PopulationGroupService : IPopulationGroupService
             populationSize,
             reserveCoverageTicks,
             consumptionProfile.Select(item => (item.ProductTypeId, item.AmountPerPersonPerTick)));
-
         if (!createResult.IsSuccess)
             return Result<PopulationGroupDto>.Failure(createResult.Error!);
 
         var id = await _populationGroupRepo.SaveAsync(createResult.Value!);
-        await SyncSettlementPopulationAsync(settlementId);
-
         var saved = await _populationGroupRepo.GetByIdAsync(id)
-            ?? throw new InvalidOperationException("Created population group was not found");
+            ?? throw new InvalidOperationException("Созданная группа населения не найдена");
 
         return Result<PopulationGroupDto>.Success(ToDto(saved));
     }
@@ -84,7 +81,7 @@ public class PopulationGroupService : IPopulationGroupService
     {
         var group = await _populationGroupRepo.GetByIdAsync(id);
         if (group is null)
-            return Result<PopulationGroupDto>.Failure($"Population group with Id {id} was not found");
+            return Result<PopulationGroupDto>.Failure($"Группа населения с Id {id} не найдена");
 
         var validation = await ValidateProductTypesAsync(consumptionProfile);
         if (!validation.IsSuccess)
@@ -95,13 +92,10 @@ public class PopulationGroupService : IPopulationGroupService
             populationSize,
             reserveCoverageTicks,
             consumptionProfile.Select(item => (item.ProductTypeId, item.AmountPerPersonPerTick)));
-
         if (!updateResult.IsSuccess)
             return Result<PopulationGroupDto>.Failure(updateResult.Error!);
 
         await _populationGroupRepo.SaveAsync(group);
-        await SyncSettlementPopulationAsync(group.SettlementId);
-
         return Result<PopulationGroupDto>.Success(ToDto(group));
     }
 
@@ -109,10 +103,9 @@ public class PopulationGroupService : IPopulationGroupService
     {
         var group = await _populationGroupRepo.GetByIdAsync(id);
         if (group is null)
-            return Result.Failure($"Population group with Id {id} was not found");
+            return Result.Failure($"Группа населения с Id {id} не найдена");
 
         await _populationGroupRepo.DeleteAsync(id);
-        await SyncSettlementPopulationAsync(group.SettlementId);
         return Result.Success();
     }
 
@@ -122,20 +115,10 @@ public class PopulationGroupService : IPopulationGroupService
         {
             var productType = await _productTypeRepo.GetByIdAsync(item.ProductTypeId);
             if (productType is null)
-                return Result.Failure($"Product type with Id {item.ProductTypeId} was not found");
+                return Result.Failure($"Тип товара с Id {item.ProductTypeId} не найден");
         }
 
         return Result.Success();
-    }
-
-    private async Task SyncSettlementPopulationAsync(int settlementId)
-    {
-        var settlement = await _settlementRepo.GetByIdAsync(settlementId)
-            ?? throw new InvalidOperationException("Settlement for population sync was not found");
-
-        var groups = await _populationGroupRepo.GetBySettlementIdAsync(settlementId);
-        settlement.Update(settlement.Name, groups.Sum(group => group.PopulationSize));
-        await _settlementRepo.SaveAsync(settlement);
     }
 
     private static PopulationGroupDto ToDto(PopulationGroup group) =>

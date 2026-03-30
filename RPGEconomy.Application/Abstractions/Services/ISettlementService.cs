@@ -5,9 +5,9 @@ namespace RPGEconomy.Application.Abstractions.Services;
 
 public interface ISettlementService
 {
-    Task<Result<SettlementSummaryDto>> CreateAsync(int worldId, string name, int population);
-    Task<Result<SettlementSummaryDto>> GetByIdAsync(int id);
-    Task<Result<IReadOnlyList<SettlementSummaryDto>>> GetByWorldIdAsync(int worldId);
-    Task<Result<SettlementSummaryDto>> UpdateAsync(int id, string name, int population);
+    Task<Result<SettlementDetailsDto>> CreateAsync(int worldId, string name);
+    Task<Result<SettlementDetailsDto>> GetByIdAsync(int id);
+    Task<Result<IReadOnlyList<SettlementListItemDto>>> GetByWorldIdAsync(int worldId);
+    Task<Result<SettlementDetailsDto>> UpdateAsync(int id, string name);
     Task<Result> DeleteAsync(int id);
 }

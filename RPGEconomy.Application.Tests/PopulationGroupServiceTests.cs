@@ -11,13 +11,12 @@ namespace RPGEconomy.Application.Tests;
 public class PopulationGroupServiceTests
 {
     [Fact]
-    public async Task CreateAsync_Should_Save_Group_And_Sync_Settlement_Population()
+    public async Task CreateAsync_Should_Save_Group()
     {
-        var settlement = new Settlement(1, 1, "Town", 0);
-        var settlementRepo = new SettlementRepositoryFake(settlement);
+        var settlement = new Settlement(1, 1, "Town");
         var service = new PopulationGroupService(
             new PopulationGroupRepositoryFake(),
-            settlementRepo,
+            new SettlementRepositoryFake(settlement),
             new ProductTypeRepositoryFake(new ProductType(10, "Bread", "Desc", 10m, 1)));
 
         var result = await service.CreateAsync(
@@ -28,27 +27,28 @@ public class PopulationGroupServiceTests
             [new ConsumptionProfileItemDto(10, 0.5m)]);
 
         result.IsSuccess.Should().BeTrue();
-        settlementRepo.Entities[settlement.Id].Population.Should().Be(50);
-        result.Value!.ReserveCoverageTicks.Should().Be(3m);
-        result.Value!.ConsumptionProfile.Should().ContainSingle(x => x.ProductTypeId == 10 && x.AmountPerPersonPerTick == 0.5m);
+        result.Value!.PopulationSize.Should().Be(50);
+        result.Value.ReserveCoverageTicks.Should().Be(3m);
+        result.Value.ConsumptionProfile.Should().ContainSingle(x => x.ProductTypeId == 10 && x.AmountPerPersonPerTick == 0.5m);
     }
 
     [Fact]
-    public async Task DeleteAsync_Should_Recalculate_Settlement_Population()
+    public async Task DeleteAsync_Should_Remove_Group()
     {
-        var settlement = new Settlement(1, 1, "Town", 100);
+        var settlement = new Settlement(1, 1, "Town");
         var firstGroup = new PopulationGroup(1, 1, "Peasants", 40);
         var secondGroup = new PopulationGroup(2, 1, "Workers", 60);
-        var settlementRepo = new SettlementRepositoryFake(settlement);
         var groupRepo = new PopulationGroupRepositoryFake(firstGroup, secondGroup);
         var service = new PopulationGroupService(
             groupRepo,
-            settlementRepo,
+            new SettlementRepositoryFake(settlement),
             new ProductTypeRepositoryFake());
 
-        await service.DeleteAsync(secondGroup.Id);
+        var result = await service.DeleteAsync(secondGroup.Id);
 
-        settlementRepo.Entities[settlement.Id].Population.Should().Be(40);
+        result.IsSuccess.Should().BeTrue();
+        var remaining = await groupRepo.GetBySettlementIdAsync(settlement.Id);
+        remaining.Should().ContainSingle(x => x.Id == firstGroup.Id);
     }
 
     private sealed class PopulationGroupRepositoryFake : IPopulationGroupRepository
@@ -105,7 +105,7 @@ public class PopulationGroupServiceTests
         public SettlementRepositoryFake(params Settlement[] items)
         {
             foreach (var item in items)
-                Entities[item.Id] = new Settlement(item.Id, item.WorldId, item.Name, item.Population);
+                Entities[item.Id] = new Settlement(item.Id, item.WorldId, item.Name);
         }
 
         public Task<Settlement?> GetByIdAsync(int id) => Task.FromResult(Entities.GetValueOrDefault(id));
@@ -115,7 +115,7 @@ public class PopulationGroupServiceTests
 
         public Task<int> SaveAsync(Settlement entity)
         {
-            Entities[entity.Id] = new Settlement(entity.Id, entity.WorldId, entity.Name, entity.Population);
+            Entities[entity.Id] = new Settlement(entity.Id, entity.WorldId, entity.Name);
             return Task.FromResult(entity.Id);
         }
 
@@ -151,5 +151,7 @@ public class PopulationGroupServiceTests
             _items.Remove(id);
             return Task.CompletedTask;
         }
+
+        public Task<bool> IsInUseAsync(int id) => Task.FromResult(false);
     }
 }

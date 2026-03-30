@@ -21,7 +21,8 @@ public class Warehouse : AggregateRoot
 
     public Result AddItem(int productTypeId, decimal quantity, QualityGrade quality)
     {
-        if (quantity <= 0m) return Result.Failure("Количество должно быть больше нуля");
+        if (quantity <= 0m)
+            return Result.Failure("Количество должно быть больше нуля");
 
         var existing = _items.FirstOrDefault(i =>
             i.ProductTypeId == productTypeId && i.Quality == quality.Name);
@@ -36,7 +37,8 @@ public class Warehouse : AggregateRoot
 
     public Result Withdraw(int productTypeId, decimal quantity, QualityGrade quality)
     {
-        if (quantity <= 0m) return Result.Failure("Количество должно быть больше нуля");
+        if (quantity <= 0m)
+            return Result.Failure("Количество должно быть больше нуля");
 
         var item = _items.FirstOrDefault(i =>
             i.ProductTypeId == productTypeId && i.Quality == quality.Name);
@@ -45,22 +47,23 @@ public class Warehouse : AggregateRoot
             return Result.Failure("Недостаточно товара на складе");
 
         item.DecreaseQuantity(quantity);
-        if (item.Quantity == 0m) _items.Remove(item);
+        if (item.Quantity == 0m)
+            _items.Remove(item);
 
         return Result.Success();
     }
 
     public bool CanFulfill(IEnumerable<RecipeIngredient> ingredients) =>
-        ingredients.All(ing =>
-            _items.Any(i =>
-                i.ProductTypeId == ing.ProductTypeId &&
-                i.Quality == QualityGrade.Normal.Name &&
-                i.Quantity >= ing.Quantity));
+        ingredients.All(ingredient =>
+            _items.Any(item =>
+                item.ProductTypeId == ingredient.ProductTypeId &&
+                item.Quality == QualityGrade.Normal.Name &&
+                item.Quantity >= ingredient.Quantity));
 
     public decimal GetAvailableQuantity(int productTypeId, QualityGrade quality) =>
         _items
-            .Where(i => i.ProductTypeId == productTypeId && i.Quality == quality.Name)
-            .Sum(i => i.Quantity);
+            .Where(item => item.ProductTypeId == productTypeId && item.Quality == quality.Name)
+            .Sum(item => item.Quantity);
 
     internal void LoadItems(IEnumerable<InventoryItem> items)
     {

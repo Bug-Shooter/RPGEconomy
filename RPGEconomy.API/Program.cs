@@ -12,6 +12,11 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        //Configure Logging
+        builder.Logging.ClearProviders();
+        builder.Logging.AddConsole();
+        builder.Logging.AddDebug();
+
         // Add services to the container.
         builder.Services.AddApplication();
         builder.Services.AddInfrastructure();

@@ -33,4 +33,21 @@ public class EconomicEventTests
 
         result.IsSuccess.Should().BeFalse();
     }
+
+    [Fact]
+    public void EconomicEvent_Create_Should_Reject_Duplicate_Effect_Scope()
+    {
+        var result = EconomicEvent.Create(
+            1,
+            "Duplicate",
+            true,
+            0,
+            5,
+            [
+                (EconomicEffectType.DemandMultiplier, 2m, 10, 20),
+                (EconomicEffectType.DemandMultiplier, 1.5m, 10, 20)
+            ]);
+
+        result.IsSuccess.Should().BeFalse();
+    }
 }

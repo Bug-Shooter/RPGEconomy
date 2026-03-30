@@ -26,7 +26,8 @@ public class SimulationEngineTests
             new EconomicEventRepositoryFake(),
             new PopulationGroupRepositoryFake(),
             new BuildingRepositoryFake(),
-            new RecipeRepositoryFake());
+            new RecipeRepositoryFake(),
+            new ProductTypeRepositoryFake());
 
         var result = await engine.ExecuteAsync(new SimulationExecutionRequest(1, 1, 1), TestContext.Current.CancellationToken);
 
@@ -38,7 +39,7 @@ public class SimulationEngineTests
     public async Task ExecuteAsync_Should_Advance_World_And_Keep_Legacy_ZeroInput_Recipes_Free_Of_ProductionDemand()
     {
         var world = new WorldEntity(1, "World", "Desc", 3);
-        var settlement = new Settlement(10, 1, "Town", 100);
+        var settlement = new Settlement(10, 1, "Town");
         var market = new Market(30, settlement.Id);
         market.RegisterProduct(2, 10m);
         var recipe = ProductionRecipe.Create("Bread", 1, [], [new RecipeIngredient(2, 1m)]).Value!;
@@ -51,7 +52,8 @@ public class SimulationEngineTests
             new PopulationGroupRepositoryFake(
                 PopulationGroup.Create(settlement.Id, "Peasants", 50, [(2, 0.1m)]).Value!),
             new BuildingRepositoryFake(new Building(40, "Bakery", settlement.Id, 100, 2, true)),
-            new RecipeRepositoryFake((100, recipe)));
+            new RecipeRepositoryFake((100, recipe)),
+            new ProductTypeRepositoryFake(new ProductType(2, "Bread", "Desc", 10m, 1d)));
 
         var result = await engine.ExecuteAsync(new SimulationExecutionRequest(1, world.Id, 2), TestContext.Current.CancellationToken);
 
@@ -64,7 +66,8 @@ public class SimulationEngineTests
 
         var price = result.Value.Result.Settlements[0].Prices[0];
         price.ProductTypeId.Should().Be(2);
-        price.Supply.Should().Be(0m);
+        price.ProductName.Should().Be("Bread");
+        price.Supply.Should().Be(2m);
         price.Demand.Should().Be(5m);
     }
 
@@ -72,7 +75,7 @@ public class SimulationEngineTests
     public async Task ExecuteAsync_Should_Add_ProductionDemand_For_Missing_Inputs()
     {
         var world = new WorldEntity(1, "World", "Desc", 0);
-        var settlement = new Settlement(10, 1, "Town", 50);
+        var settlement = new Settlement(10, 1, "Town");
         var warehouse = new Warehouse(20, settlement.Id);
 
         var market = new Market(30, settlement.Id);
@@ -97,7 +100,10 @@ public class SimulationEngineTests
             new PopulationGroupRepositoryFake(
                 PopulationGroup.Create(settlement.Id, "Peasants", 50, [(2, 0.1m)]).Value!),
             new BuildingRepositoryFake(building),
-            new RecipeRepositoryFake((100, recipe)));
+            new RecipeRepositoryFake((100, recipe)),
+            new ProductTypeRepositoryFake(
+                new ProductType(1, "Grain", "Desc", 5m, 1d),
+                new ProductType(2, "Bread", "Desc", 10m, 1d)));
 
         var result = await engine.ExecuteAsync(new SimulationExecutionRequest(1, world.Id, 1), TestContext.Current.CancellationToken);
 
@@ -105,8 +111,33 @@ public class SimulationEngineTests
         var settlementResult = result.Value!.Result.Settlements.Single();
 
         settlementResult.Prices.Should().Contain(x => x.ProductTypeId == 1 && x.Supply == 0m && x.Demand == 1m);
-        settlementResult.Prices.Should().Contain(x => x.ProductTypeId == 2 && x.Supply == 0m && x.Demand == 5m);
+        settlementResult.Prices.Should().Contain(x => x.ProductTypeId == 2 && x.Supply == 1.5m && x.Demand == 5m);
         settlementResult.Warehouse.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_Should_Fail_When_Settlement_Has_No_Warehouse()
+    {
+        var world = new WorldEntity(1, "World", "Desc", 0);
+        var settlement = new Settlement(10, 1, "Town");
+        var market = new Market(30, settlement.Id);
+
+        var engine = CreateEngine(
+            new WorldRepositoryFake(world),
+            new SettlementRepositoryFake(settlement),
+            new WarehouseRepositoryFake(),
+            new MarketRepositoryFake(market),
+            new EconomicEventRepositoryFake(),
+            new PopulationGroupRepositoryFake(),
+            new BuildingRepositoryFake(),
+            new RecipeRepositoryFake(),
+            new ProductTypeRepositoryFake());
+
+        var result = await engine.ExecuteAsync(new SimulationExecutionRequest(1, world.Id, 1), TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("склад");
+        world.CurrentDay.Should().Be(0);
     }
 
     private static SimulationEngine CreateEngine(
@@ -117,7 +148,8 @@ public class SimulationEngineTests
         IEconomicEventRepository economicEvents,
         IPopulationGroupRepository populationGroups,
         IBuildingRepository buildings,
-        IProductionRecipeRepository recipes) =>
+        IProductionRecipeRepository recipes,
+        IProductTypeRepository productTypes) =>
         new(
             worlds,
             settlements,
@@ -127,6 +159,7 @@ public class SimulationEngineTests
             populationGroups,
             buildings,
             recipes,
+            productTypes,
             new ProductionSimulationService(),
             new SettlementEconomySimulationService());
 
@@ -231,13 +264,6 @@ public class SimulationEngineTests
         public Task<IReadOnlyList<EconomicEvent>> GetBySettlementIdAsync(int settlementId) =>
             Task.FromResult((IReadOnlyList<EconomicEvent>)_items.Where(x => x.SettlementId == settlementId).ToList().AsReadOnly());
 
-        public Task<IReadOnlyList<EconomicEvent>> GetActiveBySettlementIdAsync(int settlementId, int currentDay) =>
-            Task.FromResult((IReadOnlyList<EconomicEvent>)_items
-                .Where(x => x.SettlementId == settlementId)
-                .Where(x => x.GetActiveEffects(currentDay).Count > 0)
-                .ToList()
-                .AsReadOnly());
-
         public Task<int> SaveAsync(EconomicEvent entity) => Task.FromResult(entity.Id);
 
         public Task DeleteAsync(int id) => Task.CompletedTask;
@@ -286,5 +312,30 @@ public class SimulationEngineTests
         public Task<int> SaveAsync(ProductionRecipe entity) => Task.FromResult(entity.Id);
 
         public Task DeleteAsync(int id) => Task.CompletedTask;
+    }
+
+    private sealed class ProductTypeRepositoryFake : IProductTypeRepository
+    {
+        private readonly Dictionary<int, ProductType> _items = [];
+
+        public ProductTypeRepositoryFake(params ProductType[] items)
+        {
+            foreach (var item in items)
+                _items[item.Id] = item;
+        }
+
+        public Task<ProductType?> GetByIdAsync(int id) => Task.FromResult(_items.GetValueOrDefault(id));
+
+        public Task<IReadOnlyList<ProductType>> GetAllAsync() =>
+            Task.FromResult((IReadOnlyList<ProductType>)_items.Values.ToList().AsReadOnly());
+
+        public Task<ProductType?> GetByNameAsync(string name) =>
+            Task.FromResult(_items.Values.FirstOrDefault(x => x.Name == name));
+
+        public Task<int> SaveAsync(ProductType entity) => Task.FromResult(entity.Id);
+
+        public Task DeleteAsync(int id) => Task.CompletedTask;
+
+        public Task<bool> IsInUseAsync(int id) => Task.FromResult(false);
     }
 }

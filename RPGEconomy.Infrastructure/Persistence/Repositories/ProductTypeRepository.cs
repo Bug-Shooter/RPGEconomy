@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Domain.Resources;
 using RPGEconomy.Infrastructure.Persistence.Queries;
@@ -15,8 +15,7 @@ public class ProductTypeRepository : IProductTypeRepository
     public async Task<ProductType?> GetByIdAsync(int id)
     {
         using var conn = _factory.Create();
-        return await conn.QueryFirstOrDefaultAsync<ProductType>(
-            ProductTypeQueries.GetById, new { Id = id });
+        return await conn.QueryFirstOrDefaultAsync<ProductType>(ProductTypeQueries.GetById, new { Id = id });
     }
 
     public async Task<IReadOnlyList<ProductType>> GetAllAsync()
@@ -29,8 +28,13 @@ public class ProductTypeRepository : IProductTypeRepository
     public async Task<ProductType?> GetByNameAsync(string name)
     {
         using var conn = _factory.Create();
-        return await conn.QueryFirstOrDefaultAsync<ProductType>(
-            ProductTypeQueries.GetByName, new { Name = name });
+        return await conn.QueryFirstOrDefaultAsync<ProductType>(ProductTypeQueries.GetByName, new { Name = name });
+    }
+
+    public async Task<bool> IsInUseAsync(int id)
+    {
+        using var conn = _factory.Create();
+        return await conn.ExecuteScalarAsync<bool>(ProductTypeQueries.IsInUse, new { Id = id });
     }
 
     public async Task<int> SaveAsync(ProductType productType)
@@ -38,23 +42,28 @@ public class ProductTypeRepository : IProductTypeRepository
         using var conn = _factory.Create();
 
         if (productType.IsNew)
+        {
             return await conn.ExecuteScalarAsync<int>(
-                ProductTypeQueries.Insert, new
+                ProductTypeQueries.Insert,
+                new
                 {
                     productType.Name,
                     productType.Description,
                     productType.BasePrice,
                     productType.WeightPerUnit
                 });
+        }
 
-        await conn.ExecuteAsync(ProductTypeQueries.Update, new
-        {
-            productType.Id,
-            productType.Name,
-            productType.Description,
-            productType.BasePrice,
-            productType.WeightPerUnit
-        });
+        await conn.ExecuteAsync(
+            ProductTypeQueries.Update,
+            new
+            {
+                productType.Id,
+                productType.Name,
+                productType.Description,
+                productType.BasePrice,
+                productType.WeightPerUnit
+            });
         return productType.Id;
     }
 

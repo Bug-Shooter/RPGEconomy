@@ -3,6 +3,7 @@ using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Domain.Events;
 using RPGEconomy.Infrastructure.Persistence.Queries;
 using System.Data;
+using System.Transactions;
 
 namespace RPGEconomy.Infrastructure.Persistence.Repositories;
 
@@ -17,10 +18,7 @@ public class EconomicEventRepository : IEconomicEventRepository
     {
         using var conn = _factory.Create();
 
-        var economicEvent = await conn.QueryFirstOrDefaultAsync<EconomicEvent>(
-            EconomicEventQueries.GetById,
-            new { Id = id });
-
+        var economicEvent = await conn.QueryFirstOrDefaultAsync<EconomicEvent>(EconomicEventQueries.GetById, new { Id = id });
         if (economicEvent is null)
             return null;
 
@@ -42,27 +40,14 @@ public class EconomicEventRepository : IEconomicEventRepository
         return items.AsReadOnly();
     }
 
-    public async Task<IReadOnlyList<EconomicEvent>> GetActiveBySettlementIdAsync(int settlementId, int currentDay)
-    {
-        using var conn = _factory.Create();
-
-        var items = (await conn.QueryAsync<EconomicEvent>(
-            EconomicEventQueries.GetActiveBySettlementId,
-            new { SettlementId = settlementId, CurrentDay = currentDay })).ToList();
-
-        foreach (var item in items)
-            await LoadEffectsAsync(conn, item);
-
-        return items.AsReadOnly();
-    }
-
     public async Task<int> SaveAsync(EconomicEvent entity)
     {
         using var conn = _factory.Create();
         if (conn.State != ConnectionState.Open)
             conn.Open();
 
-        using var tx = conn.BeginTransaction();
+        var useLocalTransaction = Transaction.Current is null;
+        using var tx = useLocalTransaction ? conn.BeginTransaction() : null;
 
         int economicEventId;
         if (entity.IsNew)
@@ -95,10 +80,7 @@ public class EconomicEventRepository : IEconomicEventRepository
                 tx);
         }
 
-        await conn.ExecuteAsync(
-            EconomicEventQueries.DeleteEffects,
-            new { EconomicEventId = economicEventId },
-            tx);
+        await conn.ExecuteAsync(EconomicEventQueries.DeleteEffects, new { EconomicEventId = economicEventId }, tx);
 
         if (entity.Effects.Count > 0)
         {
@@ -115,7 +97,7 @@ public class EconomicEventRepository : IEconomicEventRepository
                 tx);
         }
 
-        tx.Commit();
+        tx?.Commit();
         return economicEventId;
     }
 
@@ -130,7 +112,6 @@ public class EconomicEventRepository : IEconomicEventRepository
         var effects = await conn.QueryAsync<EconomicEffect>(
             EconomicEventQueries.GetEffects,
             new { EconomicEventId = economicEvent.Id });
-
         economicEvent.LoadEffects(effects);
     }
 }

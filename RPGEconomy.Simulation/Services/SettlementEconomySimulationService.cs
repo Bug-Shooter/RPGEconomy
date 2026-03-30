@@ -1,3 +1,4 @@
+using RPGEconomy.Domain.Events;
 using RPGEconomy.Domain.Population;
 using RPGEconomy.Domain.Production;
 using RPGEconomy.Domain.Resources;
@@ -24,7 +25,7 @@ public class SettlementEconomySimulationService
                         activeEffects,
                         group.Id,
                         group.ConsumptionProfile.Select(item => item.ProductTypeId),
-                        Domain.Events.EconomicEffectType.ConsumptionMultiplier));
+                        EconomicEffectType.ConsumptionMultiplier));
 
                 var unmetDemand = group.ConsumeFromStock(consumptionDemand);
                 foreach (var request in unmetDemand)
@@ -33,7 +34,7 @@ public class SettlementEconomySimulationService
                         activeEffects,
                         group.Id,
                         request.Key,
-                        Domain.Events.EconomicEffectType.DemandMultiplier);
+                        EconomicEffectType.DemandMultiplier);
 
                     ctx.AddConsumptionDemandRequest(
                         settlement.Id,
@@ -52,53 +53,65 @@ public class SettlementEconomySimulationService
             if (!ctx.Markets.TryGetValue(settlement.Id, out var market))
                 continue;
 
-            var activeEffects = ctx.GetActiveEffects(settlement.Id);
+            if (!ctx.Warehouses.TryGetValue(settlement.Id, out var warehouse))
+                continue;
 
+            var activeEffects = ctx.GetActiveEffects(settlement.Id);
+            var startingSupplyByProduct = CaptureStartingSupply(warehouse);
             var householdReserveRequests = BuildHouseholdReserveRequests(ctx, settlement.Id, activeEffects);
             var producerReserveRequests = BuildProducerReserveRequests(ctx, settlement.Id, activeEffects);
-
-            Warehouse? settlementWarehouse = null;
-            if (ctx.Warehouses.TryGetValue(settlement.Id, out var warehouse))
-            {
-                settlementWarehouse = warehouse;
-                FulfillWarehouseRequests(warehouse, ctx.GetConsumptionDemandRequests(settlement.Id));
-                FulfillWarehouseRequests(warehouse, householdReserveRequests);
-                FulfillWarehouseRequests(warehouse, producerReserveRequests);
-            }
-
-            var supplyByProduct = settlementWarehouse is not null
-                ? settlementWarehouse.Items
-                    .GroupBy(item => item.ProductTypeId)
-                    .ToDictionary(group => group.Key, group => group.Sum(item => item.Quantity))
-                : new Dictionary<int, decimal>();
-
-            var demandByProduct = ctx.GetConsumptionDemand(settlement.Id).ToDictionary(x => x.Key, x => x.Value);
-
-            foreach (var productionDemand in ctx.GetProductionDemand(settlement.Id))
-            {
-                demandByProduct[productionDemand.Key] =
-                    demandByProduct.GetValueOrDefault(productionDemand.Key, 0m) + productionDemand.Value;
-            }
-
-            foreach (var reserveRequest in householdReserveRequests.Concat(producerReserveRequests))
-            {
-                demandByProduct[reserveRequest.ProductTypeId] =
-                    demandByProduct.GetValueOrDefault(reserveRequest.ProductTypeId, 0m) + reserveRequest.Quantity;
-            }
+            var demandByProduct = BuildGrossDemand(
+                ctx,
+                settlement.Id,
+                householdReserveRequests,
+                producerReserveRequests);
 
             foreach (var offer in market.Offers)
             {
-                var supply = supplyByProduct.GetValueOrDefault(offer.ProductTypeId, 0m);
+                var supply = startingSupplyByProduct.GetValueOrDefault(offer.ProductTypeId, 0m);
                 var demand = demandByProduct.GetValueOrDefault(offer.ProductTypeId, 0m);
                 market.UpdateProductState(offer.ProductTypeId, supply, demand);
             }
+
+            FulfillWarehouseRequests(warehouse, ctx.GetConsumptionDemandRequests(settlement.Id));
+            FulfillWarehouseRequests(warehouse, householdReserveRequests);
+            FulfillWarehouseRequests(warehouse, producerReserveRequests);
         }
+    }
+
+    private static IReadOnlyDictionary<int, decimal> CaptureStartingSupply(Warehouse warehouse) =>
+        warehouse.Items
+            .GroupBy(item => item.ProductTypeId)
+            .ToDictionary(group => group.Key, group => group.Sum(item => item.Quantity));
+
+    private static IReadOnlyDictionary<int, decimal> BuildGrossDemand(
+        SimulationContext ctx,
+        int settlementId,
+        IReadOnlyList<TransferRequest> householdReserveRequests,
+        IReadOnlyList<TransferRequest> producerReserveRequests)
+    {
+        var demandByProduct = ctx.GetConsumptionDemand(settlementId)
+            .ToDictionary(item => item.Key, item => item.Value);
+
+        foreach (var productionDemand in ctx.GetProductionDemand(settlementId))
+        {
+            demandByProduct[productionDemand.Key] =
+                demandByProduct.GetValueOrDefault(productionDemand.Key, 0m) + productionDemand.Value;
+        }
+
+        foreach (var reserveRequest in householdReserveRequests.Concat(producerReserveRequests))
+        {
+            demandByProduct[reserveRequest.ProductTypeId] =
+                demandByProduct.GetValueOrDefault(reserveRequest.ProductTypeId, 0m) + reserveRequest.Quantity;
+        }
+
+        return demandByProduct;
     }
 
     private static IReadOnlyList<TransferRequest> BuildHouseholdReserveRequests(
         SimulationContext ctx,
         int settlementId,
-        IReadOnlyList<Domain.Events.EconomicEffect> activeEffects)
+        IReadOnlyList<EconomicEffect> activeEffects)
     {
         if (!ctx.PopulationGroups.TryGetValue(settlementId, out var groups))
             return [];
@@ -112,7 +125,7 @@ public class SettlementEconomySimulationService
                     activeEffects,
                     group.Id,
                     productIds,
-                    Domain.Events.EconomicEffectType.ConsumptionMultiplier));
+                    EconomicEffectType.ConsumptionMultiplier));
 
             var desiredReserve = group.CalculateDesiredReserve(
                 consumptionDemand,
@@ -120,7 +133,7 @@ public class SettlementEconomySimulationService
                     activeEffects,
                     group.Id,
                     productIds,
-                    Domain.Events.EconomicEffectType.DesiredReserveCoverageMultiplier));
+                    EconomicEffectType.DesiredReserveCoverageMultiplier));
 
             var reserveDemand = group.CalculateReserveDemand(desiredReserve);
             foreach (var demand in reserveDemand)
@@ -129,7 +142,7 @@ public class SettlementEconomySimulationService
                     activeEffects,
                     group.Id,
                     demand.Key,
-                    Domain.Events.EconomicEffectType.DemandMultiplier);
+                    EconomicEffectType.DemandMultiplier);
 
                 if (finalQuantity <= 0m)
                     continue;
@@ -153,7 +166,7 @@ public class SettlementEconomySimulationService
     private static IReadOnlyList<TransferRequest> BuildProducerReserveRequests(
         SimulationContext ctx,
         int settlementId,
-        IReadOnlyList<Domain.Events.EconomicEffect> activeEffects)
+        IReadOnlyList<EconomicEffect> activeEffects)
     {
         if (!ctx.Buildings.TryGetValue(settlementId, out var buildings))
             return [];
@@ -170,7 +183,7 @@ public class SettlementEconomySimulationService
                     activeEffects,
                     null,
                     recipe.Inputs.Select(item => item.ProductTypeId),
-                    Domain.Events.EconomicEffectType.ProducerReserveCoverageMultiplier));
+                    EconomicEffectType.ProducerReserveCoverageMultiplier));
 
             foreach (var demand in reserveDemand)
             {
@@ -178,7 +191,7 @@ public class SettlementEconomySimulationService
                     activeEffects,
                     null,
                     demand.Key,
-                    Domain.Events.EconomicEffectType.DemandMultiplier);
+                    EconomicEffectType.DemandMultiplier);
 
                 if (finalQuantity <= 0m)
                     continue;
@@ -200,10 +213,10 @@ public class SettlementEconomySimulationService
     }
 
     private static IReadOnlyDictionary<int, decimal> ResolveMultipliers(
-        IReadOnlyList<Domain.Events.EconomicEffect> activeEffects,
+        IReadOnlyList<EconomicEffect> activeEffects,
         int? populationGroupId,
         IEnumerable<int> productIds,
-        Domain.Events.EconomicEffectType effectType)
+        EconomicEffectType effectType)
     {
         return productIds
             .Distinct()
@@ -213,10 +226,10 @@ public class SettlementEconomySimulationService
     }
 
     private static decimal ResolveMultiplier(
-        IReadOnlyList<Domain.Events.EconomicEffect> activeEffects,
+        IReadOnlyList<EconomicEffect> activeEffects,
         int? populationGroupId,
         int productTypeId,
-        Domain.Events.EconomicEffectType effectType)
+        EconomicEffectType effectType)
     {
         var multiplier = 1m;
         foreach (var effect in activeEffects.Where(effect => effect.EffectType == effectType))
@@ -247,7 +260,14 @@ public class SettlementEconomySimulationService
     {
         foreach (var productGroup in requests.GroupBy(request => request.ProductTypeId))
         {
-            var orderedRequests = productGroup.OrderBy(request => request.OwnerId).ToList();
+            var orderedRequests = productGroup
+                .Where(request => request.Quantity > 0m)
+                .OrderBy(request => request.OwnerId)
+                .ToList();
+
+            if (orderedRequests.Count == 0)
+                continue;
+
             var available = warehouse.GetAvailableQuantity(productGroup.Key, QualityGrade.Normal);
             if (available <= 0m)
                 continue;
@@ -256,28 +276,64 @@ public class SettlementEconomySimulationService
             if (totalRequested <= 0m)
                 continue;
 
-            var remaining = decimal.Min(available, totalRequested);
-            for (var index = 0; index < orderedRequests.Count; index++)
+            foreach (var allocation in AllocateProRata(orderedRequests, available, totalRequested))
             {
-                if (remaining <= 0m)
-                    break;
-
-                var request = orderedRequests[index];
-                var allocatedQuantity = index == orderedRequests.Count - 1
-                    ? decimal.Min(request.Quantity, remaining)
-                    : decimal.Min(request.Quantity, remaining * request.Quantity / totalRequested);
-
-                if (allocatedQuantity <= 0m)
+                if (allocation.Quantity <= 0m)
                     continue;
 
-                var withdrawal = warehouse.Withdraw(productGroup.Key, allocatedQuantity, QualityGrade.Normal);
+                var withdrawal = warehouse.Withdraw(productGroup.Key, allocation.Quantity, QualityGrade.Normal);
                 if (!withdrawal.IsSuccess)
                     throw new InvalidOperationException(withdrawal.Error);
 
-                request.Apply(allocatedQuantity);
-                remaining -= allocatedQuantity;
+                allocation.Request.Apply(allocation.Quantity);
             }
         }
+    }
+
+    private static IReadOnlyList<AllocatedTransfer> AllocateProRata(
+        IReadOnlyList<TransferRequest> requests,
+        decimal available,
+        decimal totalRequested)
+    {
+        if (available >= totalRequested)
+        {
+            return requests
+                .Select(request => new AllocatedTransfer(request, request.Quantity))
+                .ToArray();
+        }
+
+        var allocations = requests
+            .Select(request => new AllocationState(
+                request,
+                decimal.Min(request.Quantity, available * request.Quantity / totalRequested)))
+            .ToList();
+
+        var allocatedTotal = allocations.Sum(item => item.AllocatedQuantity);
+        var remainder = decimal.Max(available - allocatedTotal, 0m);
+
+        if (remainder > 0m)
+        {
+            foreach (var allocation in allocations
+                         .Where(item => item.AllocatedQuantity < item.Request.Quantity)
+                         .OrderByDescending(item => item.Request.Quantity - item.AllocatedQuantity)
+                         .ThenBy(item => item.Request.OwnerId))
+            {
+                if (remainder <= 0m)
+                    break;
+
+                var additional = decimal.Min(allocation.Request.Quantity - allocation.AllocatedQuantity, remainder);
+                if (additional <= 0m)
+                    continue;
+
+                allocation.AllocatedQuantity += additional;
+                remainder -= additional;
+            }
+        }
+
+        return allocations
+            .Where(item => item.AllocatedQuantity > 0m)
+            .Select(item => new AllocatedTransfer(item.Request, item.AllocatedQuantity))
+            .ToArray();
     }
 
     private sealed record TransferRequest(
@@ -285,4 +341,18 @@ public class SettlementEconomySimulationService
         int ProductTypeId,
         decimal Quantity,
         Action<decimal> Apply);
+
+    private sealed record AllocatedTransfer(TransferRequest Request, decimal Quantity);
+
+    private sealed class AllocationState
+    {
+        public AllocationState(TransferRequest request, decimal allocatedQuantity)
+        {
+            Request = request;
+            AllocatedQuantity = allocatedQuantity;
+        }
+
+        public TransferRequest Request { get; }
+        public decimal AllocatedQuantity { get; set; }
+    }
 }

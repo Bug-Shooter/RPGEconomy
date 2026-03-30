@@ -15,6 +15,7 @@ public class ProductionSimulationService
             if (!ctx.Warehouses.TryGetValue(settlement.Id, out var warehouse)) continue;
             if (!ctx.Buildings.TryGetValue(settlement.Id, out var buildings)) continue;
 
+            // Building order is intentionally deterministic in v1 so production chains are reproducible.
             foreach (var building in buildings.Where(b => b.IsActive).OrderBy(b => b.Id))
             {
                 if (!ctx.Recipes.TryGetValue(building.RecipeId, out var recipe)) continue;

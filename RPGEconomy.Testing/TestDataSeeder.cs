@@ -24,15 +24,14 @@ public sealed class TestDataSeeder
 
     public Task<int> CreateSettlementAsync(
         int worldId,
-        string name = "Settlement",
-        int population = 1000) =>
+        string name = "Settlement") =>
         _connection.ExecuteScalarAsync<int>(
             """
-            INSERT INTO settlements (world_id, name, population)
-            VALUES (@worldId, @name, @population)
+            INSERT INTO settlements (world_id, name)
+            VALUES (@worldId, @name)
             RETURNING id;
             """,
-            new { worldId, name, population });
+            new { worldId, name });
 
     public Task<int> CreateWarehouseAsync(int settlementId) =>
         _connection.ExecuteScalarAsync<int>(
@@ -147,15 +146,16 @@ public sealed class TestDataSeeder
         int settlementId,
         string name,
         int populationSize,
+        decimal reserveCoverageTicks,
         IEnumerable<(int ProductTypeId, decimal AmountPerPersonPerTick)> consumptionProfile)
     {
         var populationGroupId = await _connection.ExecuteScalarAsync<int>(
             """
-            INSERT INTO population_groups (settlement_id, name, population_size)
-            VALUES (@settlementId, @name, @populationSize)
+            INSERT INTO population_groups (settlement_id, name, population_size, reserve_coverage_ticks)
+            VALUES (@settlementId, @name, @populationSize, @reserveCoverageTicks)
             RETURNING id;
             """,
-            new { settlementId, name, populationSize });
+            new { settlementId, name, populationSize, reserveCoverageTicks });
 
         foreach (var item in consumptionProfile)
         {

@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Domain.Common;
+using RPGEconomy.Domain.Common;
 
 namespace RPGEconomy.Domain.Production;
 
@@ -15,8 +15,14 @@ public class Building : AggregateRoot
     public IReadOnlyList<BuildingInputReserveItem> InputReserveItems => _inputReserveItems.AsReadOnly();
 
     // Dapper
-    public Building(int id, string name, int settlementId,
-        int recipeId, int workerCount, bool isActive, decimal inputReserveCoverageTicks = 0m) : base(id)
+    public Building(
+        int id,
+        string name,
+        int settlementId,
+        int recipeId,
+        int workerCount,
+        bool isActive,
+        decimal inputReserveCoverageTicks = 0m) : base(id)
     {
         Name = name;
         SettlementId = settlementId;
@@ -26,18 +32,34 @@ public class Building : AggregateRoot
         InputReserveCoverageTicks = inputReserveCoverageTicks;
     }
 
-    public static Building Create(string name, int settlementId,
-        int recipeId, int workerCount, decimal inputReserveCoverageTicks = 0m)
-        => new(0, name, settlementId, recipeId, workerCount, true, inputReserveCoverageTicks);
-
-    public void Update(string name, int workerCount, decimal inputReserveCoverageTicks)
+    public static Result<Building> Create(
+        string name,
+        int settlementId,
+        int recipeId,
+        int workerCount,
+        decimal inputReserveCoverageTicks = 0m)
     {
+        var validation = Validate(name, settlementId, recipeId, workerCount, inputReserveCoverageTicks);
+        if (!validation.IsSuccess)
+            return Result<Building>.Failure(validation.Error!);
+
+        return Result<Building>.Success(
+            new Building(0, name, settlementId, recipeId, workerCount, true, inputReserveCoverageTicks));
+    }
+
+    public Result Update(string name, int workerCount, decimal inputReserveCoverageTicks)
+    {
+        var validation = Validate(name, SettlementId, RecipeId, workerCount, inputReserveCoverageTicks);
+        if (!validation.IsSuccess)
+            return validation;
+
         Name = name;
         WorkerCount = workerCount;
         InputReserveCoverageTicks = inputReserveCoverageTicks;
+        return Result.Success();
     }
 
-    public void Update(string name, int workerCount) =>
+    public Result Update(string name, int workerCount) =>
         Update(name, workerCount, InputReserveCoverageTicks);
 
     public int BatchesPerDay(double laborDaysPerBatch) =>
@@ -65,11 +87,11 @@ public class Building : AggregateRoot
     {
         var plannedDemand = CalculatePlannedInputDemand(recipe);
         return plannedDemand.ToDictionary(
-            x => x.Key,
-            x =>
+            item => item.Key,
+            item =>
             {
-                var multiplier = coverageMultipliersByProduct?.GetValueOrDefault(x.Key, 1m) ?? 1m;
-                return x.Value * InputReserveCoverageTicks * multiplier;
+                var multiplier = coverageMultipliersByProduct?.GetValueOrDefault(item.Key, 1m) ?? 1m;
+                return item.Value * InputReserveCoverageTicks * multiplier;
             });
     }
 
@@ -79,9 +101,9 @@ public class Building : AggregateRoot
     {
         var desiredReserve = CalculateDesiredInputReserve(recipe, coverageMultipliersByProduct);
         return desiredReserve
-            .Select(x => new KeyValuePair<int, decimal>(x.Key, decimal.Max(x.Value - GetInputReserveQuantity(x.Key), 0m)))
-            .Where(x => x.Value > 0m)
-            .ToDictionary(x => x.Key, x => x.Value);
+            .Select(item => new KeyValuePair<int, decimal>(item.Key, decimal.Max(item.Value - GetInputReserveQuantity(item.Key), 0m)))
+            .Where(item => item.Value > 0m)
+            .ToDictionary(item => item.Key, item => item.Value);
     }
 
     public decimal GetInputReserveQuantity(int productTypeId) =>
@@ -92,7 +114,7 @@ public class Building : AggregateRoot
     public Result ReceiveInputReserve(int productTypeId, decimal quantity)
     {
         if (quantity <= 0m)
-            return Result.Failure("Input reserve quantity must be greater than zero");
+            return Result.Failure("Количество входного резерва должно быть больше нуля");
 
         var existing = _inputReserveItems.FirstOrDefault(item => item.ProductTypeId == productTypeId);
         if (existing is not null)
@@ -112,11 +134,11 @@ public class Building : AggregateRoot
     public Result ConsumeInputReserve(int productTypeId, decimal quantity)
     {
         if (quantity <= 0m)
-            return Result.Failure("Input reserve quantity must be greater than zero");
+            return Result.Failure("Количество входного резерва должно быть больше нуля");
 
         var item = _inputReserveItems.FirstOrDefault(x => x.ProductTypeId == productTypeId);
         if (item is null || item.Quantity < quantity)
-            return Result.Failure("Not enough input reserve stock");
+            return Result.Failure("Недостаточно товара во входном резерве");
 
         item.DecreaseQuantity(quantity);
         if (item.Quantity == 0m)
@@ -133,17 +155,44 @@ public class Building : AggregateRoot
 
     public Result Deactivate()
     {
-        if (!IsActive) return Result.Failure("Здание уже неактивно");
+        if (!IsActive)
+            return Result.Failure("Здание уже неактивно");
+
         IsActive = false;
         return Result.Success();
     }
 
     public Result Activate()
     {
-        if (IsActive) return Result.Failure("Здание уже активно");
+        if (IsActive)
+            return Result.Failure("Здание уже активно");
+
         IsActive = true;
         return Result.Success();
     }
 
-}
+    private static Result Validate(
+        string name,
+        int settlementId,
+        int recipeId,
+        int workerCount,
+        decimal inputReserveCoverageTicks)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return Result.Failure("Название здания не может быть пустым");
 
+        if (settlementId <= 0)
+            return Result.Failure("Идентификатор поселения должен быть больше нуля");
+
+        if (recipeId <= 0)
+            return Result.Failure("Идентификатор рецепта должен быть больше нуля");
+
+        if (workerCount < 0)
+            return Result.Failure("Количество рабочих не может быть отрицательным");
+
+        if (inputReserveCoverageTicks < 0m)
+            return Result.Failure("Покрытие входного резерва не может быть отрицательным");
+
+        return Result.Success();
+    }
+}

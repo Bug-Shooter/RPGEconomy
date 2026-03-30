@@ -84,8 +84,6 @@ public class PopulationGroup : AggregateRoot
                 });
     }
 
-    public IReadOnlyDictionary<int, decimal> CalculateDemand() => CalculateConsumptionDemand();
-
     public IReadOnlyDictionary<int, decimal> ConsumeFromStock(IReadOnlyDictionary<int, decimal> requestedConsumption)
     {
         var unmetDemand = new Dictionary<int, decimal>();

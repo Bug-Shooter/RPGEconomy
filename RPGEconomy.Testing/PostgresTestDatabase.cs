@@ -8,6 +8,12 @@ public sealed class PostgresTestDatabase
 {
     private static readonly string[] TablesToTruncate =
     [
+        "economic_effects",
+        "economic_events",
+        "building_input_reserves",
+        "population_group_stocks",
+        "population_group_consumption",
+        "population_groups",
         "inventory_items",
         "market_offers",
         "buildings",

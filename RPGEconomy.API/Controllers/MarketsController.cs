@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using RPGEconomy.Application.Abstractions.Services;
 
 namespace RPGEconomy.API.Controllers;
@@ -36,12 +36,12 @@ public class MarketsController : ControllerBase
 
     // POST api/settlements/{settlementId}/market/products>
     [HttpPost("products")]
-    public async Task<IActionResult> RegisterProduct(
-            int settlementId,
-            [FromBody] RegisterProductRequest request)
+    public async Task<IActionResult> RegisterProduct(int settlementId, [FromBody] RegisterProductRequest request)
     {
         var result = await _marketService.RegisterProductAsync(
-            settlementId, request.ProductTypeId, request.InitialPrice);
+            settlementId,
+            request.ProductTypeId,
+            request.InitialPrice);
 
         return this.ToActionResult(result);
     }
@@ -53,7 +53,10 @@ public class MarketsController : ControllerBase
         [FromBody] UpdateMarketProductRequest request)
     {
         var result = await _marketService.UpdateProductStateAsync(
-            settlementId, productTypeId, request.Supply, request.Demand);
+            settlementId,
+            productTypeId,
+            request.Supply,
+            request.Demand);
 
         return this.ToActionResult(result);
     }

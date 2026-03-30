@@ -166,5 +166,7 @@ public class RecipeServiceTests
             _items.Remove(id);
             return Task.CompletedTask;
         }
+
+        public Task<bool> IsInUseAsync(int id) => Task.FromResult(false);
     }
 }

@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Application.Abstractions.Repositories;
+using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.Abstractions.Services;
 using RPGEconomy.Application.DTOs;
 using RPGEconomy.Domain.Common;
@@ -15,29 +15,28 @@ public class WorldService : IWorldService
 
     public async Task<Result<WorldDto>> CreateAsync(string name, string description)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return Result<WorldDto>.Failure("Название мира не может быть пустым");
+        var createResult = World.Create(name, description);
+        if (!createResult.IsSuccess)
+            return Result<WorldDto>.Failure(createResult.Error!);
 
-        var world = World.Create(name, description);
+        var world = createResult.Value!;
         var id = await _worldRepo.SaveAsync(world);
 
-        return Result<WorldDto>.Success(new WorldDto(id, world.Name, world.Description, 0));
+        return Result<WorldDto>.Success(new WorldDto(id, world.Name, world.Description, world.CurrentDay));
     }
 
     public async Task<Result<WorldDto>> UpdateAsync(int id, string name, string description)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return Result<WorldDto>.Failure("Название мира не может быть пустым");
-
         var world = await _worldRepo.GetByIdAsync(id);
         if (world is null)
             return Result<WorldDto>.Failure($"Мир с Id {id} не найден");
 
-        world.Update(name, description);
-        await _worldRepo.SaveAsync(world);
+        var updateResult = world.Update(name, description);
+        if (!updateResult.IsSuccess)
+            return Result<WorldDto>.Failure(updateResult.Error!);
 
-        return Result<WorldDto>.Success(
-            new WorldDto(world.Id, world.Name, world.Description, world.CurrentDay));
+        await _worldRepo.SaveAsync(world);
+        return Result<WorldDto>.Success(new WorldDto(world.Id, world.Name, world.Description, world.CurrentDay));
     }
 
     public async Task<Result<WorldDto>> GetByIdAsync(int id)
@@ -46,20 +45,17 @@ public class WorldService : IWorldService
         if (world is null)
             return Result<WorldDto>.Failure($"Мир с Id {id} не найден");
 
-        return Result<WorldDto>.Success(
-            new WorldDto(world.Id, world.Name, world.Description, world.CurrentDay));
+        return Result<WorldDto>.Success(new WorldDto(world.Id, world.Name, world.Description, world.CurrentDay));
     }
 
     public async Task<Result<IReadOnlyList<WorldDto>>> GetAllAsync()
     {
         var worlds = await _worldRepo.GetAllAsync();
-
-        var dtos = worlds
-            .Select(w => new WorldDto(w.Id, w.Name, w.Description, w.CurrentDay))
-            .ToList()
-            .AsReadOnly();
-
-        return Result<IReadOnlyList<WorldDto>>.Success(dtos);
+        return Result<IReadOnlyList<WorldDto>>.Success(
+            worlds
+                .Select(world => new WorldDto(world.Id, world.Name, world.Description, world.CurrentDay))
+                .ToList()
+                .AsReadOnly());
     }
 
     public async Task<Result> DeleteAsync(int id)

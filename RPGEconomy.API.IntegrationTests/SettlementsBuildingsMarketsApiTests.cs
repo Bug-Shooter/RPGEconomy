@@ -23,7 +23,7 @@ public class SettlementsBuildingsMarketsApiTests : IAsyncLifetime
         var productId = await seed.CreateProductTypeAsync("Bread", "Desc", 10m, 1);
         var recipeId = await seed.CreateRecipeAsync("Bakery", 1, [], [(productId, 1m)]);
 
-        var settlementResponse = await client.PostAsJsonAsync($"/api/worlds/{worldId}/settlements", new { name = "Town", population = 200 }, cancellationToken: TestContext.Current.CancellationToken);
+        var settlementResponse = await client.PostAsJsonAsync($"/api/worlds/{worldId}/settlements", new { name = "Town" }, cancellationToken: TestContext.Current.CancellationToken);
         settlementResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var settlement = await settlementResponse.Content.ReadFromJsonAsync<SettlementResponse>(cancellationToken: TestContext.Current.CancellationToken);
         settlement.Should().NotBeNull();
@@ -73,7 +73,7 @@ public class SettlementsBuildingsMarketsApiTests : IAsyncLifetime
 
         var settlementResponse = await client.PostAsJsonAsync(
             $"/api/worlds/{worldId}/settlements",
-            new { name = "Town", population = 200 },
+            new { name = "Town" },
             cancellationToken: TestContext.Current.CancellationToken);
         var settlement = await settlementResponse.Content.ReadFromJsonAsync<SettlementResponse>(cancellationToken: TestContext.Current.CancellationToken);
 
@@ -99,6 +99,44 @@ public class SettlementsBuildingsMarketsApiTests : IAsyncLifetime
             new { supply = -1, demand = 3 },
             cancellationToken: TestContext.Current.CancellationToken);
         invalidUpdate.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Settlement_Get_Should_Return_Population_Computed_From_Groups()
+    {
+        var client = _factory.CreateClient();
+        await using var connection = await PostgresTestDatabase.OpenConnectionAsync();
+        var seed = new TestDataSeeder(connection);
+        var worldId = await seed.CreateWorldAsync();
+        var breadId = await seed.CreateProductTypeAsync("Bread", "Food", 10m, 1);
+
+        var settlementResponse = await client.PostAsJsonAsync(
+            $"/api/worlds/{worldId}/settlements",
+            new { name = "Town" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        settlementResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var settlement = await settlementResponse.Content.ReadFromJsonAsync<SettlementResponse>(cancellationToken: TestContext.Current.CancellationToken);
+
+        var populationGroupResponse = await client.PostAsJsonAsync(
+            $"/api/settlements/{settlement!.SettlementId}/population-groups",
+            new
+            {
+                name = "Peasants",
+                populationSize = 75,
+                reserveCoverageTicks = 1m,
+                consumptionProfile = new[] { new { productTypeId = breadId, amountPerPersonPerTick = 0.1m } }
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
+        populationGroupResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var getResponse = await client.GetAsync(
+            $"/api/worlds/{worldId}/settlements/{settlement.SettlementId}",
+            TestContext.Current.CancellationToken);
+
+        getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var refreshed = await getResponse.Content.ReadFromJsonAsync<SettlementResponse>(cancellationToken: TestContext.Current.CancellationToken);
+        refreshed.Should().NotBeNull();
+        refreshed!.Population.Should().Be(75);
     }
 
     private sealed record SettlementResponse(int SettlementId, string Name, int Population, IReadOnlyList<object> Warehouse, IReadOnlyList<object> Prices);

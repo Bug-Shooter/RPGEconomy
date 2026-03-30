@@ -1,8 +1,9 @@
-﻿using Dapper;
+using Dapper;
 using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Domain.Production;
 using RPGEconomy.Infrastructure.Persistence.Queries;
 using System.Data;
+using System.Transactions;
 
 namespace RPGEconomy.Infrastructure.Persistence.Repositories;
 
@@ -17,9 +18,7 @@ public class BuildingRepository : IBuildingRepository
     {
         using var conn = _factory.Create();
 
-        var building = await conn.QueryFirstOrDefaultAsync<Building>(
-            BuildingQueries.GetById, new { Id = id });
-
+        var building = await conn.QueryFirstOrDefaultAsync<Building>(BuildingQueries.GetById, new { Id = id });
         if (building is null)
             return null;
 
@@ -31,8 +30,8 @@ public class BuildingRepository : IBuildingRepository
     {
         using var conn = _factory.Create();
         var result = (await conn.QueryAsync<Building>(
-            BuildingQueries.GetBySettlementId, new { SettlementId = settlementId }))
-            .ToList();
+            BuildingQueries.GetBySettlementId,
+            new { SettlementId = settlementId })).ToList();
 
         foreach (var building in result)
             await LoadInputReservesAsync(conn, building);
@@ -43,13 +42,18 @@ public class BuildingRepository : IBuildingRepository
     public async Task<int> SaveAsync(Building building)
     {
         using var conn = _factory.Create();
+        if (conn.State != ConnectionState.Open)
+            conn.Open();
+
+        var useLocalTransaction = Transaction.Current is null;
+        using var tx = useLocalTransaction ? conn.BeginTransaction() : null;
 
         int buildingId;
-
         if (building.IsNew)
         {
             buildingId = await conn.ExecuteScalarAsync<int>(
-                BuildingQueries.Insert, new
+                BuildingQueries.Insert,
+                new
                 {
                     building.Name,
                     building.SettlementId,
@@ -57,24 +61,26 @@ public class BuildingRepository : IBuildingRepository
                     building.WorkerCount,
                     building.IsActive,
                     building.InputReserveCoverageTicks
-                });
+                },
+                tx);
         }
         else
         {
             buildingId = building.Id;
-            await conn.ExecuteAsync(BuildingQueries.Update, new
-            {
-                building.Id,
-                building.Name,
-                building.WorkerCount,
-                building.IsActive,
-                building.InputReserveCoverageTicks
-            });
+            await conn.ExecuteAsync(
+                BuildingQueries.Update,
+                new
+                {
+                    building.Id,
+                    building.Name,
+                    building.WorkerCount,
+                    building.IsActive,
+                    building.InputReserveCoverageTicks
+                },
+                tx);
         }
 
-        await conn.ExecuteAsync(
-            BuildingQueries.DeleteInputReserves,
-            new { BuildingId = buildingId });
+        await conn.ExecuteAsync(BuildingQueries.DeleteInputReserves, new { BuildingId = buildingId }, tx);
 
         if (building.InputReserveItems.Count > 0)
         {
@@ -85,9 +91,11 @@ public class BuildingRepository : IBuildingRepository
                     BuildingId = buildingId,
                     item.ProductTypeId,
                     item.Quantity
-                }));
+                }),
+                tx);
         }
 
+        tx?.Commit();
         return buildingId;
     }
 
@@ -99,11 +107,7 @@ public class BuildingRepository : IBuildingRepository
 
     private static async Task LoadInputReservesAsync(IDbConnection conn, Building building)
     {
-        var items = await conn.QueryAsync<BuildingInputReserveItem>(
-            BuildingQueries.GetInputReserves,
-            new { BuildingId = building.Id });
-
+        var items = await conn.QueryAsync<BuildingInputReserveItem>(BuildingQueries.GetInputReserves, new { BuildingId = building.Id });
         building.LoadInputReserveItems(items);
     }
 }
-

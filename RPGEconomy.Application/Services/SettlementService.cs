@@ -1,8 +1,9 @@
-﻿using RPGEconomy.Application.Abstractions.Repositories;
+using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.Abstractions.Services;
 using RPGEconomy.Application.DTOs;
 using RPGEconomy.Domain.Common;
 using RPGEconomy.Domain.Markets;
+using RPGEconomy.Domain.Population;
 using RPGEconomy.Domain.Production;
 using RPGEconomy.Domain.World;
 
@@ -15,112 +16,110 @@ public class SettlementService : ISettlementService
     private readonly IWarehouseRepository _warehouseRepo;
     private readonly IMarketRepository _marketRepo;
     private readonly IPopulationGroupRepository _populationGroupRepo;
+    private readonly IProductTypeRepository _productTypeRepo;
 
     public SettlementService(
         ISettlementRepository settlementRepo,
         IWorldRepository worldRepo,
         IWarehouseRepository warehouseRepo,
         IMarketRepository marketRepo,
-        IPopulationGroupRepository populationGroupRepo)
+        IPopulationGroupRepository populationGroupRepo,
+        IProductTypeRepository productTypeRepo)
     {
         _settlementRepo = settlementRepo;
         _worldRepo = worldRepo;
         _warehouseRepo = warehouseRepo;
         _marketRepo = marketRepo;
         _populationGroupRepo = populationGroupRepo;
+        _productTypeRepo = productTypeRepo;
     }
 
-    public async Task<Result<SettlementSummaryDto>> CreateAsync(
-        int worldId, string name, int population)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return Result<SettlementSummaryDto>.Failure("Название поселения не может быть пустым");
-
-        if (population < 0)
-            return Result<SettlementSummaryDto>.Failure("Население не может быть отрицательным");
-
-        var world = await _worldRepo.GetByIdAsync(worldId);
-        if (world is null)
-            return Result<SettlementSummaryDto>.Failure($"Мир с Id {worldId} не найден");
-
-        // Создаём поселение
-        var settlement = Settlement.Create(name, worldId, population);
-        var settlementId = await _settlementRepo.SaveAsync(settlement);
-
-        // Автоматически создаём склад и рынок для поселения
-        var warehouse = Warehouse.Create(settlementId);
-        await _warehouseRepo.SaveAsync(warehouse);
-
-        var market = Market.Create(settlementId);
-        await _marketRepo.SaveAsync(market);
-
-        return Result<SettlementSummaryDto>.Success(
-            new SettlementSummaryDto(settlementId, name, population, [], []));
-    }
-
-    public async Task<Result<SettlementSummaryDto>> GetByIdAsync(int id)
-    {
-        var settlement = await _settlementRepo.GetByIdAsync(id);
-        if (settlement is null)
-            return Result<SettlementSummaryDto>.Failure($"Поселение с Id {id} не найдено");
-
-        var warehouse = await _warehouseRepo.GetBySettlementIdAsync(id);
-        var market = await _marketRepo.GetBySettlementIdAsync(id);
-
-        var inventoryItems = warehouse?.Items
-            .Select(i => new InventoryItemDto(i.ProductTypeId, string.Empty, i.Quantity, i.Quality))
-            .ToList()
-            .AsReadOnly() ?? (IReadOnlyList<InventoryItemDto>)[];
-
-        var prices = market?.Offers
-            .Select(o => new MarketPriceDto(o.ProductTypeId, string.Empty, o.CurrentPrice, o.SupplyVolume, o.DemandVolume))
-            .ToList()
-            .AsReadOnly() ?? (IReadOnlyList<MarketPriceDto>)[];
-
-        return Result<SettlementSummaryDto>.Success(
-            new SettlementSummaryDto(settlement.Id, settlement.Name, settlement.Population, inventoryItems, prices));
-    }
-
-    public async Task<Result<IReadOnlyList<SettlementSummaryDto>>> GetByWorldIdAsync(int worldId)
+    public async Task<Result<SettlementDetailsDto>> CreateAsync(int worldId, string name)
     {
         var world = await _worldRepo.GetByIdAsync(worldId);
         if (world is null)
-            return Result<IReadOnlyList<SettlementSummaryDto>>.Failure($"Мир с Id {worldId} не найден");
+            return Result<SettlementDetailsDto>.Failure($"Мир с Id {worldId} не найден");
 
-        var settlements = await _settlementRepo.GetByWorldIdAsync(worldId);
+        var createResult = Settlement.Create(name, worldId);
+        if (!createResult.IsSuccess)
+            return Result<SettlementDetailsDto>.Failure(createResult.Error!);
 
-        var dtos = settlements
-            .Select(s => new SettlementSummaryDto(s.Id, s.Name, s.Population, [], []))
-            .ToList()
-            .AsReadOnly();
-
-        return Result<IReadOnlyList<SettlementSummaryDto>>.Success(dtos);
-    }
-
-    public async Task<Result<SettlementSummaryDto>> UpdateAsync(int id, string name, int population)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return Result<SettlementSummaryDto>.Failure("Название поселения не может быть пустым");
-
-        if (population < 0)
-            return Result<SettlementSummaryDto>.Failure("Население не может быть отрицательным");
-
-        var settlement = await _settlementRepo.GetByIdAsync(id);
-        if (settlement is null)
-            return Result<SettlementSummaryDto>.Failure($"Поселение с Id {id} не найдено");
-
-        var populationGroups = await _populationGroupRepo.GetBySettlementIdAsync(id);
-        if (populationGroups.Count > 0 && population != settlement.Population)
+        var settlement = createResult.Value!;
+        var settlementId = 0;
+        try
         {
-            return Result<SettlementSummaryDto>.Failure(
-                "Нельзя изменять население поселения напрямую, пока заданы группы населения");
+            settlementId = await _settlementRepo.SaveAsync(settlement);
+            await _warehouseRepo.SaveAsync(Warehouse.Create(settlementId));
+            await _marketRepo.SaveAsync(Market.Create(settlementId));
+        }
+        catch
+        {
+            if (settlementId > 0)
+                await _settlementRepo.DeleteAsync(settlementId);
+
+            throw;
         }
 
-        settlement.Update(name, population);
-        await _settlementRepo.SaveAsync(settlement);
+        return await GetByIdAsync(settlementId);
+    }
 
-        return Result<SettlementSummaryDto>.Success(
-            new SettlementSummaryDto(settlement.Id, settlement.Name, settlement.Population, [], []));
+    public async Task<Result<SettlementDetailsDto>> GetByIdAsync(int id)
+    {
+        var settlement = await _settlementRepo.GetByIdAsync(id);
+        if (settlement is null)
+            return Result<SettlementDetailsDto>.Failure($"Поселение с Id {id} не найдено");
+
+        var warehouse = await _warehouseRepo.GetBySettlementIdAsync(id);
+        if (warehouse is null)
+            return Result<SettlementDetailsDto>.Failure($"Для поселения с Id {id} не найден склад");
+
+        var market = await _marketRepo.GetBySettlementIdAsync(id);
+        if (market is null)
+            return Result<SettlementDetailsDto>.Failure($"Для поселения с Id {id} не найден рынок");
+
+        var population = await GetPopulationAsync(id);
+        var productNames = await GetProductNamesAsync();
+
+        return Result<SettlementDetailsDto>.Success(
+            new SettlementDetailsDto(
+                settlement.Id,
+                settlement.Name,
+                population,
+                MapInventory(warehouse, productNames),
+                MapPrices(market, productNames)));
+    }
+
+    public async Task<Result<IReadOnlyList<SettlementListItemDto>>> GetByWorldIdAsync(int worldId)
+    {
+        var world = await _worldRepo.GetByIdAsync(worldId);
+        if (world is null)
+            return Result<IReadOnlyList<SettlementListItemDto>>.Failure($"Мир с Id {worldId} не найден");
+
+        var settlements = await _settlementRepo.GetByWorldIdAsync(worldId);
+        var items = new List<SettlementListItemDto>(settlements.Count);
+        foreach (var settlement in settlements)
+        {
+            items.Add(new SettlementListItemDto(
+                settlement.Id,
+                settlement.Name,
+                await GetPopulationAsync(settlement.Id)));
+        }
+
+        return Result<IReadOnlyList<SettlementListItemDto>>.Success(items.AsReadOnly());
+    }
+
+    public async Task<Result<SettlementDetailsDto>> UpdateAsync(int id, string name)
+    {
+        var settlement = await _settlementRepo.GetByIdAsync(id);
+        if (settlement is null)
+            return Result<SettlementDetailsDto>.Failure($"Поселение с Id {id} не найдено");
+
+        var updateResult = settlement.Update(name);
+        if (!updateResult.IsSuccess)
+            return Result<SettlementDetailsDto>.Failure(updateResult.Error!);
+
+        await _settlementRepo.SaveAsync(settlement);
+        return await GetByIdAsync(id);
     }
 
     public async Task<Result> DeleteAsync(int id)
@@ -132,4 +131,46 @@ public class SettlementService : ISettlementService
         await _settlementRepo.DeleteAsync(id);
         return Result.Success();
     }
+
+    private async Task<int> GetPopulationAsync(int settlementId)
+    {
+        var groups = await _populationGroupRepo.GetBySettlementIdAsync(settlementId);
+        return groups.Sum(group => group.PopulationSize);
+    }
+
+    private async Task<IReadOnlyDictionary<int, string>> GetProductNamesAsync()
+    {
+        var products = await _productTypeRepo.GetAllAsync();
+        return products.ToDictionary(product => product.Id, product => product.Name);
+    }
+
+    private static IReadOnlyList<InventoryItemDto> MapInventory(
+        Warehouse warehouse,
+        IReadOnlyDictionary<int, string> productNames) =>
+        warehouse.Items
+            .Select(item => new InventoryItemDto(
+                item.ProductTypeId,
+                ResolveProductName(productNames, item.ProductTypeId),
+                item.Quantity,
+                item.Quality))
+            .ToList()
+            .AsReadOnly();
+
+    private static IReadOnlyList<MarketPriceDto> MapPrices(
+        Market market,
+        IReadOnlyDictionary<int, string> productNames) =>
+        market.Offers
+            .Select(offer => new MarketPriceDto(
+                offer.ProductTypeId,
+                ResolveProductName(productNames, offer.ProductTypeId),
+                offer.CurrentPrice,
+                offer.SupplyVolume,
+                offer.DemandVolume))
+            .ToList()
+            .AsReadOnly();
+
+    private static string ResolveProductName(
+        IReadOnlyDictionary<int, string> productNames,
+        int productTypeId) =>
+        productNames.GetValueOrDefault(productTypeId, "Неизвестный товар");
 }

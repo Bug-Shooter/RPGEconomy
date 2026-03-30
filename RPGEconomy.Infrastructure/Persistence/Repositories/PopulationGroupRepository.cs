@@ -3,6 +3,7 @@ using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Domain.Population;
 using RPGEconomy.Infrastructure.Persistence.Queries;
 using System.Data;
+using System.Transactions;
 
 namespace RPGEconomy.Infrastructure.Persistence.Repositories;
 
@@ -17,10 +18,7 @@ public class PopulationGroupRepository : IPopulationGroupRepository
     {
         using var conn = _factory.Create();
 
-        var group = await conn.QueryFirstOrDefaultAsync<PopulationGroup>(
-            PopulationGroupQueries.GetById,
-            new { Id = id });
-
+        var group = await conn.QueryFirstOrDefaultAsync<PopulationGroup>(PopulationGroupQueries.GetById, new { Id = id });
         if (group is null)
             return null;
 
@@ -45,6 +43,11 @@ public class PopulationGroupRepository : IPopulationGroupRepository
     public async Task<int> SaveAsync(PopulationGroup entity)
     {
         using var conn = _factory.Create();
+        if (conn.State != ConnectionState.Open)
+            conn.Open();
+
+        var useLocalTransaction = Transaction.Current is null;
+        using var tx = useLocalTransaction ? conn.BeginTransaction() : null;
 
         int populationGroupId;
         if (entity.IsNew)
@@ -57,7 +60,8 @@ public class PopulationGroupRepository : IPopulationGroupRepository
                     entity.Name,
                     entity.PopulationSize,
                     entity.ReserveCoverageTicks
-                });
+                },
+                tx);
         }
         else
         {
@@ -70,12 +74,11 @@ public class PopulationGroupRepository : IPopulationGroupRepository
                     entity.Name,
                     entity.PopulationSize,
                     entity.ReserveCoverageTicks
-                });
+                },
+                tx);
         }
 
-        await conn.ExecuteAsync(
-            PopulationGroupQueries.DeleteConsumptionProfile,
-            new { PopulationGroupId = populationGroupId });
+        await conn.ExecuteAsync(PopulationGroupQueries.DeleteConsumptionProfile, new { PopulationGroupId = populationGroupId }, tx);
 
         if (entity.ConsumptionProfile.Count > 0)
         {
@@ -86,12 +89,11 @@ public class PopulationGroupRepository : IPopulationGroupRepository
                     PopulationGroupId = populationGroupId,
                     item.ProductTypeId,
                     item.AmountPerPersonPerTick
-                }));
+                }),
+                tx);
         }
 
-        await conn.ExecuteAsync(
-            PopulationGroupQueries.DeleteStockItems,
-            new { PopulationGroupId = populationGroupId });
+        await conn.ExecuteAsync(PopulationGroupQueries.DeleteStockItems, new { PopulationGroupId = populationGroupId }, tx);
 
         if (entity.StockItems.Count > 0)
         {
@@ -102,9 +104,11 @@ public class PopulationGroupRepository : IPopulationGroupRepository
                     PopulationGroupId = populationGroupId,
                     item.ProductTypeId,
                     item.Quantity
-                }));
+                }),
+                tx);
         }
 
+        tx?.Commit();
         return populationGroupId;
     }
 
@@ -114,20 +118,10 @@ public class PopulationGroupRepository : IPopulationGroupRepository
         if (conn.State != ConnectionState.Open)
             conn.Open();
 
-        using var tx = conn.BeginTransaction();
-        await conn.ExecuteAsync(
-            PopulationGroupQueries.DeleteConsumptionProfile,
-            new { PopulationGroupId = id },
-            tx);
-        await conn.ExecuteAsync(
-            PopulationGroupQueries.DeleteStockItems,
-            new { PopulationGroupId = id },
-            tx);
-        await conn.ExecuteAsync(
-            PopulationGroupQueries.Delete,
-            new { Id = id },
-            tx);
-        tx.Commit();
+        var useLocalTransaction = Transaction.Current is null;
+        using var tx = useLocalTransaction ? conn.BeginTransaction() : null;
+        await conn.ExecuteAsync(PopulationGroupQueries.Delete, new { Id = id }, tx);
+        tx?.Commit();
     }
 
     private static async Task LoadChildrenAsync(IDbConnection conn, PopulationGroup group)
@@ -135,13 +129,11 @@ public class PopulationGroupRepository : IPopulationGroupRepository
         var items = await conn.QueryAsync<ConsumptionProfileItem>(
             PopulationGroupQueries.GetConsumptionProfile,
             new { PopulationGroupId = group.Id });
-
         group.LoadConsumptionProfile(items);
 
         var stockItems = await conn.QueryAsync<PopulationStockItem>(
             PopulationGroupQueries.GetStockItems,
             new { PopulationGroupId = group.Id });
-
         group.LoadStockItems(stockItems);
     }
 }

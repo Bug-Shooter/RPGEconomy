@@ -27,12 +27,13 @@ public class DeleteAndTransactionTests
         var worldId = await seed.CreateWorldAsync();
         var settlementId = await seed.CreateSettlementAsync(worldId);
         var warehouseId = await seed.CreateWarehouseAsync(settlementId);
-        await seed.AddInventoryItemAsync(warehouseId, 1, 3);
+        var productTypeId = await seed.CreateProductTypeAsync("Bread", "Food", 10m, 1);
+        await seed.AddInventoryItemAsync(warehouseId, productTypeId, 3);
         var marketId = await seed.CreateMarketAsync(settlementId);
-        await seed.AddMarketOfferAsync(marketId, 1, 10);
-        var recipeId = await seed.CreateRecipeAsync("Bread", 1, [], [(1, 1m)]);
+        await seed.AddMarketOfferAsync(marketId, productTypeId, 10);
+        var recipeId = await seed.CreateRecipeAsync("Bread", 1, [], [(productTypeId, 1m)]);
         await seed.CreateBuildingAsync(settlementId, recipeId);
-        await seed.CreatePopulationGroupAsync(settlementId, "Peasants", 10, [(1, 0.2m)]);
+        await seed.CreatePopulationGroupAsync(settlementId, "Peasants", 10, 0m, [(productTypeId, 0.2m)]);
 
         var repository = new SettlementRepository(new NpgsqlConnectionFactory(PostgresTestDatabase.ConnectionString));
         await repository.DeleteAsync(settlementId);
@@ -45,7 +46,7 @@ public class DeleteAndTransactionTests
     }
 
     [Fact]
-    public async Task WorldRepository_Delete_Should_Fail_When_Child_Settlements_Exist()
+    public async Task WorldRepository_Delete_Should_Remove_Dependent_Settlements()
     {
         await PostgresTestDatabase.ResetAsync();
         await using var connection = await PostgresTestDatabase.OpenConnectionAsync();
@@ -54,9 +55,10 @@ public class DeleteAndTransactionTests
         await seed.CreateSettlementAsync(worldId);
 
         var repository = new WorldRepository(new NpgsqlConnectionFactory(PostgresTestDatabase.ConnectionString));
-        var action = async () => await repository.DeleteAsync(worldId);
+        await repository.DeleteAsync(worldId);
 
-        await action.Should().ThrowAsync<Exception>();
+        (await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM worlds WHERE id = @worldId", new { worldId })).Should().Be(0);
+        (await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM settlements WHERE world_id = @worldId", new { worldId })).Should().Be(0);
     }
 
     [Fact]

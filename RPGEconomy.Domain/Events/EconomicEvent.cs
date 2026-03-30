@@ -109,8 +109,16 @@ public class EconomicEvent : AggregateRoot
     private Result ReplaceEffects(
         IEnumerable<(EconomicEffectType EffectType, decimal Value, int? PopulationGroupId, int? ProductTypeId)> effects)
     {
+        var effectList = effects.ToList();
+        if (effectList
+            .GroupBy(effect => new { effect.EffectType, effect.PopulationGroupId, effect.ProductTypeId })
+            .Any(group => group.Count() > 1))
+        {
+            return Result.Failure("Событие не может содержать дублирующиеся экономические эффекты");
+        }
+
         var effectEntities = new List<EconomicEffect>();
-        foreach (var effect in effects)
+        foreach (var effect in effectList)
         {
             var createResult = EconomicEffect.Create(
                 Id,

@@ -51,8 +51,8 @@ public class RecipeService : IRecipeService
         var createResult = ProductionRecipe.Create(
             name,
             laborDaysRequired,
-            inputList.Select(i => new RecipeIngredient(i.ProductTypeId, i.Quantity)),
-            outputList.Select(o => new RecipeIngredient(o.ProductTypeId, o.Quantity)));
+            inputList.Select(item => new RecipeIngredient(item.ProductTypeId, item.Quantity)),
+            outputList.Select(item => new RecipeIngredient(item.ProductTypeId, item.Quantity)));
 
         if (!createResult.IsSuccess)
             return Result<RecipeDto>.Failure(createResult.Error!);
@@ -83,8 +83,8 @@ public class RecipeService : IRecipeService
         var updateResult = recipe.Update(
             name,
             laborDaysRequired,
-            inputList.Select(i => new RecipeIngredient(i.ProductTypeId, i.Quantity)),
-            outputList.Select(o => new RecipeIngredient(o.ProductTypeId, o.Quantity)));
+            inputList.Select(item => new RecipeIngredient(item.ProductTypeId, item.Quantity)),
+            outputList.Select(item => new RecipeIngredient(item.ProductTypeId, item.Quantity)));
 
         if (!updateResult.IsSuccess)
             return Result<RecipeDto>.Failure(updateResult.Error!);
@@ -96,7 +96,8 @@ public class RecipeService : IRecipeService
     public async Task<Result> DeleteAsync(int id)
     {
         var recipe = await _recipeRepo.GetByIdAsync(id);
-        if (recipe is null) return Result.Failure($"Рецепт с Id {id} не найден");
+        if (recipe is null)
+            return Result.Failure($"Рецепт с Id {id} не найден");
 
         await _recipeRepo.DeleteAsync(id);
         return Result.Success();
@@ -126,6 +127,6 @@ public class RecipeService : IRecipeService
         recipe.Id,
         recipe.Name,
         recipe.LaborDaysRequired,
-        recipe.Inputs.Select(i => new RecipeIngredientDto(i.ProductTypeId, i.Quantity)).ToList().AsReadOnly(),
-        recipe.Outputs.Select(o => new RecipeIngredientDto(o.ProductTypeId, o.Quantity)).ToList().AsReadOnly());
+        recipe.Inputs.Select(item => new RecipeIngredientDto(item.ProductTypeId, item.Quantity)).ToList().AsReadOnly(),
+        recipe.Outputs.Select(item => new RecipeIngredientDto(item.ProductTypeId, item.Quantity)).ToList().AsReadOnly());
 }

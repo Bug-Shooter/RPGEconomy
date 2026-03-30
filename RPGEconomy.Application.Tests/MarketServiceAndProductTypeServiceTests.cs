@@ -63,6 +63,21 @@ public class MarketServiceAndProductTypeServiceTests
         result.IsSuccess.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task DeleteAsync_Should_Reject_ProductType_That_Is_Still_In_Use()
+    {
+        var repo = new ProductTypeRepositoryFake(new ProductType(1, "Bread", "Desc", 10m, 1))
+        {
+            IsInUse = true
+        };
+        var service = new ProductTypeService(repo);
+
+        var result = await service.DeleteAsync(1);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("Нельзя удалить");
+    }
+
     private sealed class MarketRepositoryFake : IMarketRepository
     {
         public Market Stored { get; private set; }
@@ -87,6 +102,8 @@ public class MarketServiceAndProductTypeServiceTests
     private sealed class ProductTypeRepositoryFake : IProductTypeRepository
     {
         private readonly Dictionary<int, ProductType> _items = [];
+
+        public bool IsInUse { get; set; }
 
         public ProductTypeRepositoryFake(params ProductType[] items)
         {
@@ -113,5 +130,7 @@ public class MarketServiceAndProductTypeServiceTests
             _items.Remove(id);
             return Task.CompletedTask;
         }
+
+        public Task<bool> IsInUseAsync(int id) => Task.FromResult(IsInUse);
     }
 }

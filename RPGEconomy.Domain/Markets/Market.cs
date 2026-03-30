@@ -39,9 +39,6 @@ public class Market : AggregateRoot
         return offer.UpdateState(supply, demand);
     }
 
-    public Result UpdateMarket(int productTypeId, decimal supply, decimal demand) =>
-        UpdateProductState(productTypeId, supply, demand);
-
     public MarketOffer? GetOffer(int productTypeId) =>
         _offers.FirstOrDefault(o => o.ProductTypeId == productTypeId);
 

@@ -55,6 +55,12 @@ The current codebase now implements an early **Stage 4** baseline:
 - building input reserve stocks
 - settlement-scoped economic events and effects
 
+Important data-model decisions in the current baseline:
+
+- `PopulationGroup` is the only source of truth for settlement population
+- settlement population is computed in read models as the sum of `population_groups.population_size`
+- the active SQL baseline is destructive and reset-oriented: old local/test databases are expected to be recreated or rebuilt by the current baseline script
+
 Important Stage 4 interpretation in this repository:
 
 - buildings remain the practical producer layer
@@ -91,7 +97,15 @@ Important routes currently include:
 - PostgreSQL with `Npgsql`
 - Dapper repositories with handwritten SQL query classes
 - DbUp-based startup migrations
+- a single destructive baseline migration script that drops legacy tables before recreating the current schema
 - aggregate-style persistence for warehouses, markets, recipes, population-group children, building reserve children, and event effects via explicit child-row replacement
+- repository child-row replacement uses local SQL transactions unless the caller already runs inside an ambient transaction
+
+Database integrity rules enforced directly in the current baseline include:
+
+- foreign keys from inventory, market offers, recipe ingredients, and population consumption to `product_types`
+- unique constraints for one product per market offer, one product-quality row per warehouse item, one product per reserve row, and one scoped economic effect per event
+- check constraints for non-negative quantities, positive prices and exchange rates, non-negative reserve coverage, and valid event windows
 
 Money-related columns use `NUMERIC` in the database and `decimal` in code for:
 
@@ -133,6 +147,12 @@ Current market price behavior:
 - price stays stable when both are zero
 - price is clamped to a minimum floor and to a bounded per-tick change
 
+Current price input semantics:
+
+- `supply` is the settlement warehouse stock snapshot visible at the start of the market phase
+- `demand` is gross tick demand: unmet household consumption plus production demand plus reserve demand
+- internal transfers into household consumption and reserves happen after market state is updated, so post-transfer warehouse остаток does not feed back into the same tick's market supply
+
 ### Simulation flow
 
 The simulation runtime loads settlements and related aggregates once, runs ticks in memory, and persists selected aggregates after execution.
@@ -141,8 +161,9 @@ Current tick order:
 
 1. household stock consumption
 2. production tick from building input reserves
-3. reserve-demand calculation and reserve replenishment
-4. settlement-economy aggregation tick
+3. snapshot market-visible warehouse stock
+4. compute gross demand and update market state
+5. transfer warehouse stock into immediate consumption and reserve replenishment
 
 The production tick currently:
 
@@ -159,7 +180,12 @@ The settlement-economy tick currently derives:
 - additional demand from production-side missing inputs
 - household reserve demand from reserve gaps
 - producer reserve demand from input-reserve gaps
-- supply from warehouse stock after production and reserve transfers
+- supply from warehouse stock snapshot before market-phase transfers
+
+Simulation safety rules currently enforced:
+
+- the engine fails fast if a settlement is missing a warehouse or market
+- missing infrastructure is treated as an invalid persisted state, not as a silent skip
 
 Economic events:
 
@@ -217,3 +243,4 @@ These concepts are **not implemented today** unless they are explicitly present 
 - integration tests require a live PostgreSQL environment
 - buildings still serve as the producer abstraction, so richer producer behavior must continue adapting into warehouse and market boundaries instead of bypassing them
 - production chains are intentionally deterministic and simple: building order is stable, reserve transfers use fixed-band ordering plus deterministic pro-rata allocation, and there is still no optimization or richer priority model
+- settlement bootstrap is coordinated in the application layer with compensating cleanup instead of a shared cross-repository transaction abstraction
