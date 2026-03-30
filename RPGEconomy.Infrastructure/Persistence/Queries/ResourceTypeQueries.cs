@@ -13,6 +13,13 @@ internal static class ResourceTypeQueries
         FROM resource_types
         """;
 
+    public const string SearchByName = """
+        SELECT id, name, description, is_renewable AS "isRenewable", regeneration_rate_per_day AS "regenerationRatePerDay"
+        FROM resource_types
+        WHERE name ILIKE '%' || @Search || '%'
+        ORDER BY similarity(name, @Search) DESC, name ASC, id ASC
+        """;
+
     public const string GetByName = """
         SELECT id, name, description, is_renewable AS "isRenewable", regeneration_rate_per_day AS "regenerationRatePerDay"
         FROM resource_types

@@ -25,6 +25,13 @@ public class ProductTypeRepository : IProductTypeRepository
         return result.ToList().AsReadOnly();
     }
 
+    public async Task<IReadOnlyList<ProductType>> SearchByNameAsync(string search)
+    {
+        using var conn = _factory.Create();
+        var result = await conn.QueryAsync<ProductType>(ProductTypeQueries.SearchByName, new { Search = search });
+        return result.ToList().AsReadOnly();
+    }
+
     public async Task<ProductType?> GetByNameAsync(string name)
     {
         using var conn = _factory.Create();

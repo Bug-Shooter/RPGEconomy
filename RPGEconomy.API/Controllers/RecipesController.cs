@@ -15,9 +15,11 @@ public class RecipesController : ControllerBase
 
     // GET: api/recipes
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] string? search)
     {
-        var result = await _recipeService.GetAllAsync();
+        var result = string.IsNullOrWhiteSpace(search)
+            ? await _recipeService.GetAllAsync()
+            : await _recipeService.SearchByNameAsync(search);
         return Ok(result.Value);
     }
 

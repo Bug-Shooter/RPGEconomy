@@ -13,6 +13,13 @@ internal static class ProductTypeQueries
         FROM product_types
         """;
 
+    public const string SearchByName = """
+        SELECT id, name, description, base_price AS "basePrice", weight_per_unit AS "weightPerUnit"
+        FROM product_types
+        WHERE name ILIKE '%' || @Search || '%'
+        ORDER BY similarity(name, @Search) DESC, name ASC, id ASC
+        """;
+
     public const string GetByName = """
         SELECT id, name, description, base_price AS "basePrice", weight_per_unit AS "weightPerUnit"
         FROM product_types

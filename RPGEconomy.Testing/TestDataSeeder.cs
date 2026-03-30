@@ -91,6 +91,19 @@ public sealed class TestDataSeeder
             """,
             new { name, description, basePrice, weightPerUnit });
 
+    public Task<int> CreateResourceTypeAsync(
+        string name = "Resource",
+        string description = "Description",
+        bool isRenewable = false,
+        double regenerationRatePerDay = 0) =>
+        _connection.ExecuteScalarAsync<int>(
+            """
+            INSERT INTO resource_types (name, description, is_renewable, regeneration_rate_per_day)
+            VALUES (@name, @description, @isRenewable, @regenerationRatePerDay)
+            RETURNING id;
+            """,
+            new { name, description, isRenewable, regenerationRatePerDay });
+
     public async Task<int> CreateRecipeAsync(
         string name,
         double laborDaysRequired,

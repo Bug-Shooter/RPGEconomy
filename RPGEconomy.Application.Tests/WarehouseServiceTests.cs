@@ -241,6 +241,12 @@ public class WarehouseServiceTests
         public Task<IReadOnlyList<ProductType>> GetAllAsync() =>
             Task.FromResult((IReadOnlyList<ProductType>)_items.Values.ToList().AsReadOnly());
 
+        public Task<IReadOnlyList<ProductType>> SearchByNameAsync(string search) =>
+            Task.FromResult((IReadOnlyList<ProductType>)_items.Values
+                .Where(x => x.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
+                .ToList()
+                .AsReadOnly());
+
         public Task<ProductType?> GetByNameAsync(string name) =>
             Task.FromResult(_items.Values.FirstOrDefault(x => x.Name == name));
 

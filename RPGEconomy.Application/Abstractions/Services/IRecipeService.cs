@@ -7,6 +7,7 @@ public interface IRecipeService
 {
     Task<Result<RecipeDto>> GetByIdAsync(int id);
     Task<Result<IReadOnlyList<RecipeDto>>> GetAllAsync();
+    Task<Result<IReadOnlyList<RecipeDto>>> SearchByNameAsync(string search);
     Task<Result<RecipeDto>> CreateAsync(
         string name,
         double laborDaysRequired,

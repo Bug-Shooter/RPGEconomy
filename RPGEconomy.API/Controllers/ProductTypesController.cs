@@ -14,9 +14,11 @@ public class ProductTypesController : ControllerBase
 
     // GET: api/products
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] string? search)
     {
-        var result = await _productTypeService.GetAllAsync();
+        var result = string.IsNullOrWhiteSpace(search)
+            ? await _productTypeService.GetAllAsync()
+            : await _productTypeService.SearchByNameAsync(search);
         return Ok(result.Value);
     }
 

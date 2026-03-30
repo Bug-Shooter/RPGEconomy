@@ -28,6 +28,17 @@ public class ProductTypeService : IProductTypeService
             products.Select(ToDto).ToList().AsReadOnly());
     }
 
+    public async Task<Result<IReadOnlyList<ProductTypeDto>>> SearchByNameAsync(string search)
+    {
+        var normalizedSearch = search.Trim();
+        if (normalizedSearch.Length == 0)
+            return await GetAllAsync();
+
+        var products = await _repo.SearchByNameAsync(normalizedSearch);
+        return Result<IReadOnlyList<ProductTypeDto>>.Success(
+            products.Select(ToDto).ToList().AsReadOnly());
+    }
+
     public async Task<Result<ProductTypeDto>> CreateAsync(
         string name,
         string description,

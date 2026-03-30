@@ -93,10 +93,66 @@ public class RecipeServiceTests
         repository.Stored[1].Outputs.Should().ContainSingle();
     }
 
+    [Fact]
+    public async Task SearchByNameAsync_Should_Return_Matching_Recipes()
+    {
+        var matchingRecipe = ProductionRecipe.Create(
+            "Bread",
+            1,
+            [new RecipeIngredient(1, 2m)],
+            [new RecipeIngredient(2, 1m)]).Value!;
+        var repository = new RecipeRepositoryFake(matchingRecipe)
+        {
+            SearchIds = [1]
+        };
+        var service = new RecipeService(
+            repository,
+            new ProductTypeRepositoryFake(
+                new ProductType(1, "Grain", "Desc", 1m, 1),
+                new ProductType(2, "Bread", "Desc", 2m, 1)));
+
+        var result = await service.SearchByNameAsync("bre");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle(x => x.Name == "Bread");
+        repository.SearchCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SearchByNameAsync_Should_Fallback_To_GetAll_For_Whitespace()
+    {
+        var firstRecipe = ProductionRecipe.Create(
+            "Bread",
+            1,
+            [new RecipeIngredient(1, 2m)],
+            [new RecipeIngredient(2, 1m)]).Value!;
+        var secondRecipe = ProductionRecipe.Create(
+            "Ale",
+            1,
+            [new RecipeIngredient(1, 1m)],
+            [new RecipeIngredient(2, 1m)]).Value!;
+        var repository = new RecipeRepositoryFake(firstRecipe, secondRecipe);
+        var service = new RecipeService(
+            repository,
+            new ProductTypeRepositoryFake(
+                new ProductType(1, "Grain", "Desc", 1m, 1),
+                new ProductType(2, "Bread", "Desc", 2m, 1)));
+
+        var result = await service.SearchByNameAsync("  ");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().HaveCount(2);
+        repository.GetAllCalls.Should().Be(1);
+        repository.SearchCalls.Should().Be(0);
+    }
+
     private sealed class RecipeRepositoryFake : IProductionRecipeRepository
     {
         public Dictionary<int, ProductionRecipe> Stored { get; } = [];
         private int _nextId = 1;
+        public IReadOnlyList<int> SearchIds { get; set; } = [];
+        public int GetAllCalls { get; private set; }
+        public int SearchCalls { get; private set; }
 
         public RecipeRepositoryFake(params ProductionRecipe[] recipes)
         {
@@ -110,7 +166,16 @@ public class RecipeServiceTests
         public Task<ProductionRecipe?> GetByIdAsync(int id) => Task.FromResult(Stored.GetValueOrDefault(id));
 
         public Task<IReadOnlyList<ProductionRecipe>> GetAllAsync() =>
-            Task.FromResult((IReadOnlyList<ProductionRecipe>)Stored.Values.ToList().AsReadOnly());
+            Task.FromResult((IReadOnlyList<ProductionRecipe>)GetAll());
+
+        public Task<IReadOnlyList<ProductionRecipe>> SearchByNameAsync(string search)
+        {
+            SearchCalls++;
+            var matches = SearchIds.Count == 0
+                ? Stored.Values.Where(x => x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList()
+                : SearchIds.Select(id => Stored[id]).ToList();
+            return Task.FromResult((IReadOnlyList<ProductionRecipe>)matches.AsReadOnly());
+        }
 
         public Task<int> SaveAsync(ProductionRecipe entity)
         {
@@ -152,6 +217,12 @@ public class RecipeServiceTests
         public Task<IReadOnlyList<ProductType>> GetAllAsync() =>
             Task.FromResult((IReadOnlyList<ProductType>)_items.Values.ToList().AsReadOnly());
 
+        public Task<IReadOnlyList<ProductType>> SearchByNameAsync(string search) =>
+            Task.FromResult((IReadOnlyList<ProductType>)_items.Values
+                .Where(x => x.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
+                .ToList()
+                .AsReadOnly());
+
         public Task<ProductType?> GetByNameAsync(string name) =>
             Task.FromResult(_items.Values.FirstOrDefault(x => x.Name == name));
 
@@ -168,5 +239,11 @@ public class RecipeServiceTests
         }
 
         public Task<bool> IsInUseAsync(int id) => Task.FromResult(false);
+
+        private IReadOnlyList<ProductionRecipe> GetAll()
+        {
+            GetAllCalls++;
+            return Stored.Values.ToList().AsReadOnly();
+        }
     }
 }

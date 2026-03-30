@@ -13,6 +13,13 @@ internal static class ProductionRecipeQueries
         FROM production_recipes
         """;
 
+    public const string SearchByName = """
+        SELECT id, name, labor_days_required AS "laborDaysRequired"
+        FROM production_recipes
+        WHERE name ILIKE '%' || @Search || '%'
+        ORDER BY similarity(name, @Search) DESC, name ASC, id ASC
+        """;
+
     public const string Insert = """
         INSERT INTO production_recipes (name, labor_days_required)
         VALUES (@Name, @LaborDaysRequired)

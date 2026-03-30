@@ -26,6 +26,13 @@ public class ResourceTypeRepository : IResourceTypeRepository
         return result.ToList().AsReadOnly();
     }
 
+    public async Task<IReadOnlyList<ResourceType>> SearchByNameAsync(string search)
+    {
+        using var conn = _factory.Create();
+        var result = await conn.QueryAsync<ResourceType>(ResourceTypeQueries.SearchByName, new { Search = search });
+        return result.ToList().AsReadOnly();
+    }
+
     public async Task<ResourceType?> GetByNameAsync(string name)
     {
         using var conn = _factory.Create();

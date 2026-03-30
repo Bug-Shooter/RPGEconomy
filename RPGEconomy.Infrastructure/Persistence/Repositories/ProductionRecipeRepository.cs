@@ -37,6 +37,19 @@ public class ProductionRecipeRepository : IProductionRecipeRepository
         return recipes.AsReadOnly();
     }
 
+    public async Task<IReadOnlyList<ProductionRecipe>> SearchByNameAsync(string search)
+    {
+        using var conn = _factory.Create();
+
+        var recipes = (await conn.QueryAsync<ProductionRecipe>(
+            ProductionRecipeQueries.SearchByName,
+            new { Search = search })).ToList();
+        foreach (var recipe in recipes)
+            await LoadIngredientsAsync(conn, recipe);
+
+        return recipes.AsReadOnly();
+    }
+
     public async Task<int> SaveAsync(ProductionRecipe recipe)
     {
         using var conn = _factory.Create();

@@ -35,6 +35,17 @@ public class RecipeService : IRecipeService
         return Result<IReadOnlyList<RecipeDto>>.Success(dtos);
     }
 
+    public async Task<Result<IReadOnlyList<RecipeDto>>> SearchByNameAsync(string search)
+    {
+        var normalizedSearch = search.Trim();
+        if (normalizedSearch.Length == 0)
+            return await GetAllAsync();
+
+        var recipes = await _recipeRepo.SearchByNameAsync(normalizedSearch);
+        var dtos = recipes.Select(ToDto).ToList().AsReadOnly();
+        return Result<IReadOnlyList<RecipeDto>>.Success(dtos);
+    }
+
     public async Task<Result<RecipeDto>> CreateAsync(
         string name,
         double laborDaysRequired,

@@ -28,6 +28,17 @@ public class ResourceTypeService : IResourceTypeService
             resources.Select(ToDto).ToList().AsReadOnly());
     }
 
+    public async Task<Result<IReadOnlyList<ResourceTypeDto>>> SearchByNameAsync(string search)
+    {
+        var normalizedSearch = search.Trim();
+        if (normalizedSearch.Length == 0)
+            return await GetAllAsync();
+
+        var resources = await _repo.SearchByNameAsync(normalizedSearch);
+        return Result<IReadOnlyList<ResourceTypeDto>>.Success(
+            resources.Select(ToDto).ToList().AsReadOnly());
+    }
+
     public async Task<Result<ResourceTypeDto>> CreateAsync(
         string name,
         string description,

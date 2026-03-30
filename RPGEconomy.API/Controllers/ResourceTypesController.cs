@@ -14,9 +14,11 @@ public class ResourceTypesController : ControllerBase
 
     // GET: api/resources
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] string? search)
     {
-        var result = await _resourceTypeService.GetAllAsync();
+        var result = string.IsNullOrWhiteSpace(search)
+            ? await _resourceTypeService.GetAllAsync()
+            : await _resourceTypeService.SearchByNameAsync(search);
         return Ok(result.Value);
     }
 

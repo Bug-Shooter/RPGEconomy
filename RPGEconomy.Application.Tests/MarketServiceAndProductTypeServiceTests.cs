@@ -64,6 +64,43 @@ public class MarketServiceAndProductTypeServiceTests
     }
 
     [Fact]
+    public async Task SearchByNameAsync_Should_Return_Matching_ProductTypes()
+    {
+        var repo = new ProductTypeRepositoryFake(
+            new ProductType(1, "Bread", "Desc", 10m, 1),
+            new ProductType(2, "Brew", "Desc", 11m, 1))
+        {
+            SearchResults =
+            [
+                new ProductType(1, "Bread", "Desc", 10m, 1)
+            ]
+        };
+        var service = new ProductTypeService(repo);
+
+        var result = await service.SearchByNameAsync("bre");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle(x => x.Name == "Bread");
+        repo.SearchCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SearchByNameAsync_Should_Fallback_To_GetAll_For_Whitespace()
+    {
+        var repo = new ProductTypeRepositoryFake(
+            new ProductType(1, "Bread", "Desc", 10m, 1),
+            new ProductType(2, "Ale", "Desc", 8m, 1));
+        var service = new ProductTypeService(repo);
+
+        var result = await service.SearchByNameAsync("   ");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().HaveCount(2);
+        repo.GetAllCalls.Should().Be(1);
+        repo.SearchCalls.Should().Be(0);
+    }
+
+    [Fact]
     public async Task DeleteAsync_Should_Reject_ProductType_That_Is_Still_In_Use()
     {
         var repo = new ProductTypeRepositoryFake(new ProductType(1, "Bread", "Desc", 10m, 1))
@@ -104,6 +141,9 @@ public class MarketServiceAndProductTypeServiceTests
         private readonly Dictionary<int, ProductType> _items = [];
 
         public bool IsInUse { get; set; }
+        public IReadOnlyList<ProductType> SearchResults { get; set; } = [];
+        public int GetAllCalls { get; private set; }
+        public int SearchCalls { get; private set; }
 
         public ProductTypeRepositoryFake(params ProductType[] items)
         {
@@ -114,7 +154,19 @@ public class MarketServiceAndProductTypeServiceTests
         public Task<ProductType?> GetByIdAsync(int id) => Task.FromResult(_items.GetValueOrDefault(id));
 
         public Task<IReadOnlyList<ProductType>> GetAllAsync() =>
-            Task.FromResult((IReadOnlyList<ProductType>)_items.Values.ToList().AsReadOnly());
+            Task.FromResult((IReadOnlyList<ProductType>)GetAll());
+
+        public Task<IReadOnlyList<ProductType>> SearchByNameAsync(string search)
+        {
+            SearchCalls++;
+            if (SearchResults.Count > 0)
+                return Task.FromResult(SearchResults);
+
+            return Task.FromResult((IReadOnlyList<ProductType>)_items.Values
+                .Where(x => x.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
+                .ToList()
+                .AsReadOnly());
+        }
 
         public Task<ProductType?> GetByNameAsync(string name) =>
             Task.FromResult(_items.Values.FirstOrDefault(x => x.Name == name));
@@ -132,5 +184,11 @@ public class MarketServiceAndProductTypeServiceTests
         }
 
         public Task<bool> IsInUseAsync(int id) => Task.FromResult(IsInUse);
+
+        private IReadOnlyList<ProductType> GetAll()
+        {
+            GetAllCalls++;
+            return _items.Values.ToList().AsReadOnly();
+        }
     }
 }
