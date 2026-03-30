@@ -35,4 +35,9 @@ internal static class WarehouseQueries
         INSERT INTO inventory_items (warehouse_id, product_type_id, quantity, quality)
         VALUES (@WarehouseId, @ProductTypeId, @Quantity, @Quality)
         """;
+
+    public const string Delete = """
+        DELETE FROM warehouses
+        WHERE id = @Id
+        """;
 }

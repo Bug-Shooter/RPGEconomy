@@ -9,9 +9,10 @@ public class WorldAndSimulationJobTests
     [Fact]
     public void AdvanceDays_Should_Reject_NonPositive_Value()
     {
-        // Тест запуска симуляции при отрицательном значении дней
-        var world = WorldEntity.Create("Earth", "Desc");
+        var createResult = WorldEntity.Create("Earth", "Desc");
+        createResult.IsSuccess.Should().BeTrue();
 
+        var world = createResult.Value!;
         var result = world.AdvanceDays(0);
 
         result.IsSuccess.Should().BeFalse();
@@ -21,7 +22,6 @@ public class WorldAndSimulationJobTests
     [Fact]
     public void SimulationJob_Should_Track_Running_Completed_And_Error_Transitions()
     {
-        // Тест отслеживания статусов транзакций
         var job = SimulationJob.Create(1, 3);
 
         var running = job.MarkRunning();

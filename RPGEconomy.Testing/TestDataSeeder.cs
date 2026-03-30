@@ -24,15 +24,14 @@ public sealed class TestDataSeeder
 
     public Task<int> CreateSettlementAsync(
         int worldId,
-        string name = "Settlement",
-        int population = 1000) =>
+        string name = "Settlement") =>
         _connection.ExecuteScalarAsync<int>(
             """
-            INSERT INTO settlements (world_id, name, population)
-            VALUES (@worldId, @name, @population)
+            INSERT INTO settlements (world_id, name)
+            VALUES (@worldId, @name)
             RETURNING id;
             """,
-            new { worldId, name, population });
+            new { worldId, name });
 
     public Task<int> CreateWarehouseAsync(int settlementId) =>
         _connection.ExecuteScalarAsync<int>(
@@ -46,7 +45,7 @@ public sealed class TestDataSeeder
     public Task<int> AddInventoryItemAsync(
         int warehouseId,
         int productTypeId,
-        int quantity,
+        decimal quantity,
         string quality = "Normal") =>
         _connection.ExecuteScalarAsync<int>(
             """
@@ -68,9 +67,9 @@ public sealed class TestDataSeeder
     public Task<int> AddMarketOfferAsync(
         int marketId,
         int productTypeId,
-        double currentPrice,
-        int supplyVolume = 0,
-        int demandVolume = 0) =>
+        decimal currentPrice,
+        decimal supplyVolume = 0,
+        decimal demandVolume = 0) =>
         _connection.ExecuteScalarAsync<int>(
             """
             INSERT INTO market_offers (market_id, product_type_id, current_price, supply_volume, demand_volume)
@@ -82,7 +81,7 @@ public sealed class TestDataSeeder
     public Task<int> CreateProductTypeAsync(
         string name = "Product",
         string description = "Description",
-        double basePrice = 10,
+        decimal basePrice = 10,
         double weightPerUnit = 1) =>
         _connection.ExecuteScalarAsync<int>(
             """
@@ -95,8 +94,8 @@ public sealed class TestDataSeeder
     public async Task<int> CreateRecipeAsync(
         string name,
         double laborDaysRequired,
-        IEnumerable<(int ProductTypeId, int Quantity)> inputs,
-        IEnumerable<(int ProductTypeId, int Quantity)> outputs)
+        IEnumerable<(int ProductTypeId, decimal Quantity)> inputs,
+        IEnumerable<(int ProductTypeId, decimal Quantity)> outputs)
     {
         var recipeId = await _connection.ExecuteScalarAsync<int>(
             """
@@ -142,4 +141,39 @@ public sealed class TestDataSeeder
             RETURNING id;
             """,
             new { name, settlementId, recipeId, workerCount, isActive });
+
+    public async Task<int> CreatePopulationGroupAsync(
+        int settlementId,
+        string name,
+        int populationSize,
+        decimal reserveCoverageTicks,
+        IEnumerable<(int ProductTypeId, decimal AmountPerPersonPerTick)> consumptionProfile)
+    {
+        var populationGroupId = await _connection.ExecuteScalarAsync<int>(
+            """
+            INSERT INTO population_groups (settlement_id, name, population_size, reserve_coverage_ticks)
+            VALUES (@settlementId, @name, @populationSize, @reserveCoverageTicks)
+            RETURNING id;
+            """,
+            new { settlementId, name, populationSize, reserveCoverageTicks });
+
+        foreach (var item in consumptionProfile)
+        {
+            await _connection.ExecuteAsync(
+                """
+                INSERT INTO population_group_consumption
+                    (population_group_id, product_type_id, amount_per_person_per_tick)
+                VALUES
+                    (@populationGroupId, @productTypeId, @amountPerPersonPerTick)
+                """,
+                new
+                {
+                    populationGroupId,
+                    productTypeId = item.ProductTypeId,
+                    amountPerPersonPerTick = item.AmountPerPersonPerTick
+                });
+        }
+
+        return populationGroupId;
+    }
 }

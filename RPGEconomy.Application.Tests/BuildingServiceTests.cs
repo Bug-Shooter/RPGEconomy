@@ -13,13 +13,15 @@ public class BuildingServiceTests
     {
         var service = new BuildingService(
             new BuildingRepositoryFake(),
-            new SettlementRepositoryFake(new Settlement(1, 1, "Town", 100)),
-            new RecipeRepositoryFake(ProductionRecipe.Create("Bread", 1, [], [new RecipeIngredient(2, 1)])));
+            new SettlementRepositoryFake(new Settlement(1, 1, "Town")),
+            new RecipeRepositoryFake(
+                ProductionRecipe.Create("Bread", 1, [], [new RecipeIngredient(2, 1)]).Value!));
 
-        var result = await service.CreateAsync(1, "Bakery", 1, 3);
+        var result = await service.CreateAsync(1, "Bakery", 1, 3, 2m);
 
         result.IsSuccess.Should().BeTrue();
         result.Value!.Name.Should().Be("Bakery");
+        result.Value.InputReserveCoverageTicks.Should().Be(2m);
     }
 
     [Fact]
@@ -41,13 +43,17 @@ public class BuildingServiceTests
         private int _nextId = 1;
 
         public Task<Building?> GetByIdAsync(int id) => Task.FromResult(_items.GetValueOrDefault(id));
+
         public Task<IReadOnlyList<Building>> GetBySettlementIdAsync(int settlementId) =>
             Task.FromResult((IReadOnlyList<Building>)_items.Values.Where(x => x.SettlementId == settlementId).ToList().AsReadOnly());
 
         public Task<int> SaveAsync(Building entity)
         {
             var id = entity.Id == 0 ? _nextId++ : entity.Id;
-            _items[id] = new Building(id, entity.Name, entity.SettlementId, entity.RecipeId, entity.WorkerCount, entity.IsActive);
+            var clone = new Building(id, entity.Name, entity.SettlementId, entity.RecipeId, entity.WorkerCount, entity.IsActive, entity.InputReserveCoverageTicks);
+            foreach (var item in entity.InputReserveItems)
+                clone.ReceiveInputReserve(item.ProductTypeId, item.Quantity);
+            _items[id] = clone;
             return Task.FromResult(id);
         }
 
@@ -69,9 +75,12 @@ public class BuildingServiceTests
         }
 
         public Task<Settlement?> GetByIdAsync(int id) => Task.FromResult(_items.GetValueOrDefault(id));
+
         public Task<IReadOnlyList<Settlement>> GetByWorldIdAsync(int worldId) =>
             Task.FromResult((IReadOnlyList<Settlement>)_items.Values.Where(x => x.WorldId == worldId).ToList().AsReadOnly());
+
         public Task<int> SaveAsync(Settlement entity) => Task.FromResult(entity.Id);
+
         public Task DeleteAsync(int id) => Task.CompletedTask;
     }
 
@@ -83,20 +92,25 @@ public class BuildingServiceTests
         {
             var index = 1;
             foreach (var recipe in recipes)
-                _items[index++] = new ProductionRecipe(index - 1, recipe.Name, recipe.LaborDaysRequired);
+            {
+                var stored = new ProductionRecipe(index, recipe.Name, recipe.LaborDaysRequired);
+                stored.Update(
+                    recipe.Name,
+                    recipe.LaborDaysRequired,
+                    recipe.Inputs.Select(i => new RecipeIngredient(i.ProductTypeId, i.Quantity)),
+                    recipe.Outputs.Select(o => new RecipeIngredient(o.ProductTypeId, o.Quantity)));
+                _items[index] = stored;
+                index++;
+            }
         }
 
-        public Task<ProductionRecipe?> GetByIdAsync(int id)
-        {
-            if (_items.TryGetValue(id, out var recipe))
-                return Task.FromResult<ProductionRecipe?>(recipe);
-
-            return Task.FromResult<ProductionRecipe?>(null);
-        }
+        public Task<ProductionRecipe?> GetByIdAsync(int id) => Task.FromResult(_items.GetValueOrDefault(id));
 
         public Task<IReadOnlyList<ProductionRecipe>> GetAllAsync() =>
             Task.FromResult((IReadOnlyList<ProductionRecipe>)_items.Values.ToList().AsReadOnly());
+
         public Task<int> SaveAsync(ProductionRecipe entity) => Task.FromResult(entity.Id);
+
         public Task DeleteAsync(int id) => Task.CompletedTask;
     }
 }

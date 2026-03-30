@@ -1,53 +1,198 @@
-﻿using RPGEconomy.Domain.Common;
+using RPGEconomy.Domain.Common;
 
 namespace RPGEconomy.Domain.Production;
 
 public class Building : AggregateRoot
 {
+    private readonly List<BuildingInputReserveItem> _inputReserveItems = [];
+
     public string Name { get; private set; }
     public int SettlementId { get; private set; }
     public int RecipeId { get; private set; }
     public int WorkerCount { get; private set; }
     public bool IsActive { get; private set; }
+    public decimal InputReserveCoverageTicks { get; private set; }
+    public IReadOnlyList<BuildingInputReserveItem> InputReserveItems => _inputReserveItems.AsReadOnly();
 
     // Dapper
-    public Building(int id, string name, int settlementId,
-        int recipeId, int workerCount, bool isActive) : base(id)
+    public Building(
+        int id,
+        string name,
+        int settlementId,
+        int recipeId,
+        int workerCount,
+        bool isActive,
+        decimal inputReserveCoverageTicks = 0m) : base(id)
     {
         Name = name;
         SettlementId = settlementId;
         RecipeId = recipeId;
         WorkerCount = workerCount;
         IsActive = isActive;
+        InputReserveCoverageTicks = inputReserveCoverageTicks;
     }
 
-    public static Building Create(string name, int settlementId,
-        int recipeId, int workerCount)
-        => new(0, name, settlementId, recipeId, workerCount, true);
-    public void Update(string name, int workerCount)
+    public static Result<Building> Create(
+        string name,
+        int settlementId,
+        int recipeId,
+        int workerCount,
+        decimal inputReserveCoverageTicks = 0m)
     {
+        var validation = Validate(name, settlementId, recipeId, workerCount, inputReserveCoverageTicks);
+        if (!validation.IsSuccess)
+            return Result<Building>.Failure(validation.Error!);
+
+        return Result<Building>.Success(
+            new Building(0, name, settlementId, recipeId, workerCount, true, inputReserveCoverageTicks));
+    }
+
+    public Result Update(string name, int workerCount, decimal inputReserveCoverageTicks)
+    {
+        var validation = Validate(name, SettlementId, RecipeId, workerCount, inputReserveCoverageTicks);
+        if (!validation.IsSuccess)
+            return validation;
+
         Name = name;
         WorkerCount = workerCount;
+        InputReserveCoverageTicks = inputReserveCoverageTicks;
+        return Result.Success();
     }
+
+    public Result Update(string name, int workerCount) =>
+        Update(name, workerCount, InputReserveCoverageTicks);
 
     public int BatchesPerDay(double laborDaysPerBatch) =>
         laborDaysPerBatch <= 0
             ? 0
             : (int)Math.Floor(WorkerCount / laborDaysPerBatch);
 
+    public IReadOnlyDictionary<int, decimal> CalculatePlannedInputDemand(ProductionRecipe recipe)
+    {
+        var plannedBatchCount = BatchesPerDay(recipe.LaborDaysRequired);
+        if (plannedBatchCount <= 0)
+            return new Dictionary<int, decimal>();
+
+        return recipe.Inputs
+            .Where(input => input.Quantity > 0m)
+            .GroupBy(input => input.ProductTypeId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(input => input.Quantity) * plannedBatchCount);
+    }
+
+    public IReadOnlyDictionary<int, decimal> CalculateDesiredInputReserve(
+        ProductionRecipe recipe,
+        IReadOnlyDictionary<int, decimal>? coverageMultipliersByProduct = null)
+    {
+        var plannedDemand = CalculatePlannedInputDemand(recipe);
+        return plannedDemand.ToDictionary(
+            item => item.Key,
+            item =>
+            {
+                var multiplier = coverageMultipliersByProduct?.GetValueOrDefault(item.Key, 1m) ?? 1m;
+                return item.Value * InputReserveCoverageTicks * multiplier;
+            });
+    }
+
+    public IReadOnlyDictionary<int, decimal> CalculateReserveDemand(
+        ProductionRecipe recipe,
+        IReadOnlyDictionary<int, decimal>? coverageMultipliersByProduct = null)
+    {
+        var desiredReserve = CalculateDesiredInputReserve(recipe, coverageMultipliersByProduct);
+        return desiredReserve
+            .Select(item => new KeyValuePair<int, decimal>(item.Key, decimal.Max(item.Value - GetInputReserveQuantity(item.Key), 0m)))
+            .Where(item => item.Value > 0m)
+            .ToDictionary(item => item.Key, item => item.Value);
+    }
+
+    public decimal GetInputReserveQuantity(int productTypeId) =>
+        _inputReserveItems
+            .Where(item => item.ProductTypeId == productTypeId)
+            .Sum(item => item.Quantity);
+
+    public Result ReceiveInputReserve(int productTypeId, decimal quantity)
+    {
+        if (quantity <= 0m)
+            return Result.Failure("Количество входного резерва должно быть больше нуля");
+
+        var existing = _inputReserveItems.FirstOrDefault(item => item.ProductTypeId == productTypeId);
+        if (existing is not null)
+        {
+            existing.IncreaseQuantity(quantity);
+            return Result.Success();
+        }
+
+        var createResult = BuildingInputReserveItem.Create(Id, productTypeId, quantity);
+        if (!createResult.IsSuccess)
+            return Result.Failure(createResult.Error!);
+
+        _inputReserveItems.Add(createResult.Value!);
+        return Result.Success();
+    }
+
+    public Result ConsumeInputReserve(int productTypeId, decimal quantity)
+    {
+        if (quantity <= 0m)
+            return Result.Failure("Количество входного резерва должно быть больше нуля");
+
+        var item = _inputReserveItems.FirstOrDefault(x => x.ProductTypeId == productTypeId);
+        if (item is null || item.Quantity < quantity)
+            return Result.Failure("Недостаточно товара во входном резерве");
+
+        item.DecreaseQuantity(quantity);
+        if (item.Quantity == 0m)
+            _inputReserveItems.Remove(item);
+
+        return Result.Success();
+    }
+
+    internal void LoadInputReserveItems(IEnumerable<BuildingInputReserveItem> inputReserveItems)
+    {
+        _inputReserveItems.Clear();
+        _inputReserveItems.AddRange(inputReserveItems);
+    }
+
     public Result Deactivate()
     {
-        if (!IsActive) return Result.Failure("Здание уже неактивно");
+        if (!IsActive)
+            return Result.Failure("Здание уже неактивно");
+
         IsActive = false;
         return Result.Success();
     }
 
     public Result Activate()
     {
-        if (IsActive) return Result.Failure("Здание уже активно");
+        if (IsActive)
+            return Result.Failure("Здание уже активно");
+
         IsActive = true;
         return Result.Success();
     }
 
-}
+    private static Result Validate(
+        string name,
+        int settlementId,
+        int recipeId,
+        int workerCount,
+        decimal inputReserveCoverageTicks)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return Result.Failure("Название здания не может быть пустым");
 
+        if (settlementId <= 0)
+            return Result.Failure("Идентификатор поселения должен быть больше нуля");
+
+        if (recipeId <= 0)
+            return Result.Failure("Идентификатор рецепта должен быть больше нуля");
+
+        if (workerCount < 0)
+            return Result.Failure("Количество рабочих не может быть отрицательным");
+
+        if (inputReserveCoverageTicks < 0m)
+            return Result.Failure("Покрытие входного резерва не может быть отрицательным");
+
+        return Result.Success();
+    }
+}

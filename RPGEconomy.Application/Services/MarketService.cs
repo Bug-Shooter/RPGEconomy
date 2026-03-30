@@ -22,36 +22,49 @@ public class MarketService : IMarketService
         if (market is null)
             return Result<IReadOnlyList<MarketPriceDto>>.Failure("Рынок не найден");
 
-        // Подтягиваем имена товаров
-        var productIds = market.Offers.Select(o => o.ProductTypeId).ToList();
-        var productNames = new Dictionary<int, string>();
-
-        foreach (var pid in productIds)
-        {
-            var product = await _productTypeRepo.GetByIdAsync(pid);
-            if (product is not null)
-                productNames[pid] = product.Name;
-        }
-
         var prices = market.Offers
-            .Select(o => new MarketPriceDto(
-                o.ProductTypeId,
-                productNames.GetValueOrDefault(o.ProductTypeId, "Unknown"),
-                o.CurrentPrice,
-                o.SupplyVolume,
-                o.DemandVolume))
-            .ToList()
-            .AsReadOnly();
+            .Select(BuildPriceDtoAsync)
+            .ToList();
 
-        return Result<IReadOnlyList<MarketPriceDto>>.Success(prices);
+        var resolvedPrices = await Task.WhenAll(prices);
+
+        return Result<IReadOnlyList<MarketPriceDto>>.Success(resolvedPrices.ToList().AsReadOnly());
+    }
+
+    public async Task<Result<MarketPriceDto>> GetProductAsync(int settlementId, int productTypeId)
+    {
+        var market = await _marketRepo.GetBySettlementIdAsync(settlementId);
+        if (market is null)
+            return Result<MarketPriceDto>.Failure("Рынок не найден");
+
+        var offer = market.GetOffer(productTypeId);
+        if (offer is null)
+            return Result<MarketPriceDto>.Failure($"Товар с Id {productTypeId} не найден на рынке");
+
+        return Result<MarketPriceDto>.Success(await BuildPriceDtoAsync(offer));
+    }
+
+    public async Task<Result<MarketPriceDto>> UpdateProductStateAsync(
+        int settlementId,
+        int productTypeId,
+        decimal supply,
+        decimal demand)
+    {
+        var market = await _marketRepo.GetBySettlementIdAsync(settlementId);
+        if (market is null)
+            return Result<MarketPriceDto>.Failure("Рынок не найден");
+
+        var result = market.UpdateProductState(productTypeId, supply, demand);
+        if (!result.IsSuccess)
+            return Result<MarketPriceDto>.Failure(result.Error!);
+
+        await _marketRepo.SaveAsync(market);
+        return await GetProductAsync(settlementId, productTypeId);
     }
 
     public async Task<Result> RegisterProductAsync(
-        int settlementId, int productTypeId, double initialPrice)
+        int settlementId, int productTypeId, decimal initialPrice)
     {
-        if (initialPrice <= 0)
-            return Result.Failure("Начальная цена должна быть больше нуля");
-
         var product = await _productTypeRepo.GetByIdAsync(productTypeId);
         if (product is null)
             return Result.Failure($"Тип товара с Id {productTypeId} не найден");
@@ -65,5 +78,16 @@ public class MarketService : IMarketService
 
         await _marketRepo.SaveAsync(market);
         return Result.Success();
+    }
+
+    private async Task<MarketPriceDto> BuildPriceDtoAsync(RPGEconomy.Domain.Markets.MarketOffer offer)
+    {
+        var product = await _productTypeRepo.GetByIdAsync(offer.ProductTypeId);
+        return new MarketPriceDto(
+            offer.ProductTypeId,
+            product?.Name ?? "Unknown",
+            offer.CurrentPrice,
+            offer.SupplyVolume,
+            offer.DemandVolume);
     }
 }

@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Domain.Common;
+using RPGEconomy.Domain.Common;
 
 namespace RPGEconomy.Domain.Production;
 
@@ -12,20 +12,29 @@ public class ProductionRecipe : AggregateRoot
     public IReadOnlyList<RecipeIngredient> Inputs => _inputs.AsReadOnly();
     public IReadOnlyList<RecipeIngredient> Outputs => _outputs.AsReadOnly();
 
-    // Dapper — ингредиенты загружаются отдельно через LoadIngredients
+    // Dapper - ingredients are loaded separately through LoadIngredients.
     public ProductionRecipe(int id, string name, double laborDaysRequired) : base(id)
     {
         Name = name;
         LaborDaysRequired = laborDaysRequired;
     }
 
-    public static ProductionRecipe Create(string name, double laborDaysRequired,
-        IEnumerable<RecipeIngredient> inputs, IEnumerable<RecipeIngredient> outputs)
+    public static Result<ProductionRecipe> Create(
+        string name,
+        double laborDaysRequired,
+        IEnumerable<RecipeIngredient> inputs,
+        IEnumerable<RecipeIngredient> outputs)
     {
+        var inputList = inputs.ToList();
+        var outputList = outputs.ToList();
+
+        var validation = Validate(name, laborDaysRequired, inputList, outputList);
+        if (!validation.IsSuccess)
+            return Result<ProductionRecipe>.Failure(validation.Error!);
+
         var recipe = new ProductionRecipe(0, name, laborDaysRequired);
-        recipe._inputs.AddRange(inputs);
-        recipe._outputs.AddRange(outputs);
-        return recipe;
+        recipe.LoadIngredients(inputList, outputList);
+        return Result<ProductionRecipe>.Success(recipe);
     }
 
     internal void LoadIngredients(
@@ -38,10 +47,55 @@ public class ProductionRecipe : AggregateRoot
         _outputs.AddRange(outputs);
     }
 
-    public void Update(string name, double laborDaysRequired, IEnumerable<RecipeIngredient> inputs, IEnumerable<RecipeIngredient> outputs)
+    public Result Update(
+        string name,
+        double laborDaysRequired,
+        IEnumerable<RecipeIngredient> inputs,
+        IEnumerable<RecipeIngredient> outputs)
     {
+        var inputList = inputs.ToList();
+        var outputList = outputs.ToList();
+
+        var validation = Validate(name, laborDaysRequired, inputList, outputList);
+        if (!validation.IsSuccess)
+            return validation;
+
         Name = name;
         LaborDaysRequired = laborDaysRequired;
-        LoadIngredients(inputs, outputs);
+        LoadIngredients(inputList, outputList);
+        return Result.Success();
+    }
+
+    private static Result Validate(
+        string name,
+        double laborDaysRequired,
+        IReadOnlyList<RecipeIngredient> inputs,
+        IReadOnlyList<RecipeIngredient> outputs)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return Result.Failure("Название рецепта не может быть пустым");
+
+        if (laborDaysRequired <= 0)
+            return Result.Failure("Трудозатраты должны быть больше нуля");
+
+        if (outputs.Count == 0)
+            return Result.Failure("Рецепт должен содержать хотя бы один выходной товар");
+
+        if (inputs.Any(i => i.ProductTypeId <= 0) || outputs.Any(o => o.ProductTypeId <= 0))
+            return Result.Failure("Идентификатор товара должен быть больше нуля");
+
+        if (inputs.Any(i => i.Quantity <= 0m))
+            return Result.Failure("Количество входного ресурса должно быть больше нуля");
+
+        if (outputs.Any(o => o.Quantity <= 0m))
+            return Result.Failure("Количество выходного товара должно быть больше нуля");
+
+        if (inputs.GroupBy(i => i.ProductTypeId).Any(group => group.Count() > 1))
+            return Result.Failure("Рецепт не может содержать дублирующиеся входные ресурсы");
+
+        if (outputs.GroupBy(o => o.ProductTypeId).Any(group => group.Count() > 1))
+            return Result.Failure("Рецепт не может содержать дублирующиеся выходные товары");
+
+        return Result.Success();
     }
 }

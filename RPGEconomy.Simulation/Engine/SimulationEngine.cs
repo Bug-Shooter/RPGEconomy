@@ -1,8 +1,10 @@
-﻿using RPGEconomy.Application.Abstractions.Repositories;
+using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.Abstractions.Services;
 using RPGEconomy.Application.DTOs;
 using RPGEconomy.Domain.Common;
+using RPGEconomy.Domain.Events;
 using RPGEconomy.Domain.Markets;
+using RPGEconomy.Domain.Population;
 using RPGEconomy.Domain.Production;
 using RPGEconomy.Simulation.Services;
 
@@ -14,30 +16,39 @@ public class SimulationEngine : ISimulationExecutor
     private readonly ISettlementRepository _settlementRepo;
     private readonly IWarehouseRepository _warehouseRepo;
     private readonly IMarketRepository _marketRepo;
+    private readonly IEconomicEventRepository _economicEventRepo;
+    private readonly IPopulationGroupRepository _populationGroupRepo;
     private readonly IBuildingRepository _buildingRepo;
     private readonly IProductionRecipeRepository _recipeRepo;
+    private readonly IProductTypeRepository _productTypeRepo;
 
     private readonly ProductionSimulationService _productionService;
-    private readonly MarketSimulationService _marketService;
+    private readonly SettlementEconomySimulationService _settlementEconomyService;
 
     public SimulationEngine(
         IWorldRepository worldRepo,
         ISettlementRepository settlementRepo,
         IWarehouseRepository warehouseRepo,
         IMarketRepository marketRepo,
+        IEconomicEventRepository economicEventRepo,
+        IPopulationGroupRepository populationGroupRepo,
         IBuildingRepository buildingRepo,
         IProductionRecipeRepository recipeRepo,
+        IProductTypeRepository productTypeRepo,
         ProductionSimulationService productionService,
-        MarketSimulationService marketService)
+        SettlementEconomySimulationService settlementEconomyService)
     {
         _worldRepo = worldRepo;
         _settlementRepo = settlementRepo;
         _warehouseRepo = warehouseRepo;
         _marketRepo = marketRepo;
+        _economicEventRepo = economicEventRepo;
+        _populationGroupRepo = populationGroupRepo;
         _buildingRepo = buildingRepo;
         _recipeRepo = recipeRepo;
+        _productTypeRepo = productTypeRepo;
         _productionService = productionService;
-        _marketService = marketService;
+        _settlementEconomyService = settlementEconomyService;
     }
 
     public async Task<Result<SimulationExecutionResult>> ExecuteAsync(
@@ -52,61 +63,82 @@ public class SimulationEngine : ISimulationExecutor
             return Result<SimulationExecutionResult>.Failure($"Мир с Id {worldId} не найден");
 
         var daysBefore = world.CurrentDay;
+        var contextResult = await LoadContextAsync(worldId, world.CurrentDay);
+        if (!contextResult.IsSuccess)
+            return Result<SimulationExecutionResult>.Failure(contextResult.Error!);
 
-        // Загружаем контекст один раз, не прыгаем в базу на каждом тике
-        var ctx = await LoadContextAsync(worldId, world.CurrentDay);
+        var ctx = contextResult.Value!;
 
-        for (int i = 0; i < days; i++)
-        {
+        for (var i = 0; i < days; i++)
             RunTick(ctx);
-        }
+
+        var advanceResult = world.AdvanceDays(days);
+        if (!advanceResult.IsSuccess)
+            return Result<SimulationExecutionResult>.Failure(advanceResult.Error!);
 
         await PersistContextAsync(ctx);
-
-        world.AdvanceDays(days);
         await _worldRepo.SaveAsync(world);
 
-        var result = BuildResult(worldId, daysBefore, world.CurrentDay, ctx);
+        var productNames = await GetProductNamesAsync();
+        var result = BuildResult(worldId, daysBefore, world.CurrentDay, ctx, productNames);
         return Result<SimulationExecutionResult>.Success(new SimulationExecutionResult(result));
     }
 
     private void RunTick(SimulationContext ctx)
     {
-        // Порядок важен!!!!!! : сначала производство, потом рынок
+        _settlementEconomyService.ConsumeHouseholdStocks(ctx);
         _productionService.RunTick(ctx);
-        _marketService.RunTick(ctx);
+        _settlementEconomyService.ReplenishReservesAndUpdateMarket(ctx);
+        ctx.AdvanceDay();
     }
 
-    private async Task<SimulationContext> LoadContextAsync(int worldId, int currentDay)
+    private async Task<Result<SimulationContext>> LoadContextAsync(int worldId, int currentDay)
     {
         var settlements = await _settlementRepo.GetByWorldIdAsync(worldId);
 
-        var warehouses = new Dictionary<int, Warehouse>();
-        var markets = new Dictionary<int, Market>();
-        var buildings = new Dictionary<int, IReadOnlyList<Building>>();
+        var warehouses = new Dictionary<int, Warehouse>(settlements.Count);
+        var markets = new Dictionary<int, Market>(settlements.Count);
+        var populationGroups = new Dictionary<int, IReadOnlyList<PopulationGroup>>(settlements.Count);
+        var buildings = new Dictionary<int, IReadOnlyList<Building>>(settlements.Count);
+        var economicEvents = new Dictionary<int, IReadOnlyList<EconomicEvent>>(settlements.Count);
 
         foreach (var settlement in settlements)
         {
             var warehouse = await _warehouseRepo.GetBySettlementIdAsync(settlement.Id);
-            if (warehouse is not null) warehouses[settlement.Id] = warehouse;
+            if (warehouse is null)
+            {
+                return Result<SimulationContext>.Failure(
+                    $"Для поселения с Id {settlement.Id} не найден склад");
+            }
 
             var market = await _marketRepo.GetBySettlementIdAsync(settlement.Id);
-            if (market is not null) markets[settlement.Id] = market;
+            if (market is null)
+            {
+                return Result<SimulationContext>.Failure(
+                    $"Для поселения с Id {settlement.Id} не найден рынок");
+            }
 
-            var buildingList = await _buildingRepo.GetBySettlementIdAsync(settlement.Id);
-            buildings[settlement.Id] = buildingList;
+            warehouses[settlement.Id] = warehouse;
+            markets[settlement.Id] = market;
+            populationGroups[settlement.Id] = await _populationGroupRepo.GetBySettlementIdAsync(settlement.Id);
+            buildings[settlement.Id] = await _buildingRepo.GetBySettlementIdAsync(settlement.Id);
+            economicEvents[settlement.Id] = await _economicEventRepo.GetBySettlementIdAsync(settlement.Id);
         }
 
         var allRecipes = await _recipeRepo.GetAllAsync();
-        var recipes = allRecipes.ToDictionary(r => r.Id);
+        var recipes = allRecipes.ToDictionary(recipe => recipe.Id);
 
-        return new SimulationContext(
-            worldId, currentDay,
-            settlements,
-            warehouses,
-            markets,
-            buildings,
-            recipes);
+        return Result<SimulationContext>.Success(
+            new SimulationContext(
+                worldId,
+                currentDay,
+                settlements,
+                warehouses,
+                markets,
+                populationGroups,
+                buildings,
+                recipes,
+                economicEvents));
     }
 
     private async Task PersistContextAsync(SimulationContext ctx)
@@ -114,30 +146,70 @@ public class SimulationEngine : ISimulationExecutor
         foreach (var warehouse in ctx.Warehouses.Values)
             await _warehouseRepo.SaveAsync(warehouse);
 
+        foreach (var populationGroup in ctx.PopulationGroups.Values.SelectMany(groups => groups))
+            await _populationGroupRepo.SaveAsync(populationGroup);
+
+        foreach (var building in ctx.Buildings.Values.SelectMany(buildings => buildings))
+            await _buildingRepo.SaveAsync(building);
+
         foreach (var market in ctx.Markets.Values)
             await _marketRepo.SaveAsync(market);
     }
 
     private SimulationResultDto BuildResult(
-        int worldId, int daysBefore, int daysAfter, SimulationContext ctx)
+        int worldId,
+        int daysBefore,
+        int daysAfter,
+        SimulationContext ctx,
+        IReadOnlyDictionary<int, string> productNames)
     {
-        var settlements = ctx.Settlements.Select(s =>
-        {
-            var inventory = ctx.Warehouses.TryGetValue(s.Id, out var wh)
-                ? wh.Items.Select(i =>
-                    new InventoryItemDto(i.ProductTypeId, string.Empty, i.Quantity, i.Quality))
-                    .ToList().AsReadOnly()
-                : (IReadOnlyList<InventoryItemDto>)[];
+        var settlements = ctx.Settlements
+            .Select(settlement =>
+            {
+                var inventory = ctx.Warehouses[settlement.Id].Items
+                    .Select(item => new InventoryItemDto(
+                        item.ProductTypeId,
+                        ResolveProductName(productNames, item.ProductTypeId),
+                        item.Quantity,
+                        item.Quality))
+                    .ToList()
+                    .AsReadOnly();
 
-            var prices = ctx.Markets.TryGetValue(s.Id, out var m)
-                ? m.Offers.Select(o =>
-                    new MarketPriceDto(o.ProductTypeId, string.Empty, o.CurrentPrice, o.SupplyVolume, o.DemandVolume))
-                    .ToList().AsReadOnly()
-                : (IReadOnlyList<MarketPriceDto>)[];
+                var prices = ctx.Markets[settlement.Id].Offers
+                    .Select(offer => new MarketPriceDto(
+                        offer.ProductTypeId,
+                        ResolveProductName(productNames, offer.ProductTypeId),
+                        offer.CurrentPrice,
+                        offer.SupplyVolume,
+                        offer.DemandVolume))
+                    .ToList()
+                    .AsReadOnly();
 
-            return new SettlementSummaryDto(s.Id, s.Name, s.Population, inventory, prices);
-        }).ToList().AsReadOnly();
+                var population = ctx.PopulationGroups
+                    .GetValueOrDefault(settlement.Id, Array.Empty<PopulationGroup>())
+                    .Sum(group => group.PopulationSize);
+
+                return new SimulationSettlementDto(
+                    settlement.Id,
+                    settlement.Name,
+                    population,
+                    inventory,
+                    prices);
+            })
+            .ToList()
+            .AsReadOnly();
 
         return new SimulationResultDto(worldId, daysBefore, daysAfter, settlements);
     }
+
+    private async Task<IReadOnlyDictionary<int, string>> GetProductNamesAsync()
+    {
+        var products = await _productTypeRepo.GetAllAsync();
+        return products.ToDictionary(product => product.Id, product => product.Name);
+    }
+
+    private static string ResolveProductName(
+        IReadOnlyDictionary<int, string> productNames,
+        int productTypeId) =>
+        productNames.GetValueOrDefault(productTypeId, "Неизвестный товар");
 }

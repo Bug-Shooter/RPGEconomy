@@ -54,4 +54,66 @@ public class WarehouseTests
 
         result.Should().BeFalse();
     }
+
+    [Fact]
+    public void AddItem_Should_Preserve_Fractional_Quantity()
+    {
+        var warehouse = Warehouse.Create(1);
+
+        warehouse.AddItem(10, 1.25m, QualityGrade.Normal);
+        warehouse.AddItem(10, 0.75m, QualityGrade.Normal);
+
+        warehouse.Items.Should().ContainSingle();
+        warehouse.Items[0].Quantity.Should().Be(2m);
+    }
+
+    [Fact]
+    public void SetItemQuantity_Should_Create_Item_When_Missing()
+    {
+        var warehouse = Warehouse.Create(1);
+
+        var result = warehouse.SetItemQuantity(10, 4m, QualityGrade.Normal);
+
+        result.IsSuccess.Should().BeTrue();
+        warehouse.Items.Should().ContainSingle(item =>
+            item.ProductTypeId == 10 &&
+            item.Quantity == 4m &&
+            item.Quality == QualityGrade.Normal.Name);
+    }
+
+    [Fact]
+    public void SetItemQuantity_Should_Update_Existing_Item_Without_Duplicating()
+    {
+        var warehouse = Warehouse.Create(1);
+        warehouse.AddItem(10, 2m, QualityGrade.Normal);
+
+        var result = warehouse.SetItemQuantity(10, 9m, QualityGrade.Normal);
+
+        result.IsSuccess.Should().BeTrue();
+        warehouse.Items.Should().ContainSingle();
+        warehouse.Items[0].Quantity.Should().Be(9m);
+    }
+
+    [Fact]
+    public void SetItemQuantity_Should_Remove_Item_When_Quantity_Is_Zero()
+    {
+        var warehouse = Warehouse.Create(1);
+        warehouse.AddItem(10, 2m, QualityGrade.Normal);
+
+        var result = warehouse.SetItemQuantity(10, 0m, QualityGrade.Normal);
+
+        result.IsSuccess.Should().BeTrue();
+        warehouse.Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SetItemQuantity_Should_Fail_For_Negative_Quantity()
+    {
+        var warehouse = Warehouse.Create(1);
+
+        var result = warehouse.SetItemQuantity(10, -1m, QualityGrade.Normal);
+
+        result.IsSuccess.Should().BeFalse();
+        warehouse.Items.Should().BeEmpty();
+    }
 }

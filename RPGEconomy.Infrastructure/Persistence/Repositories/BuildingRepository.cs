@@ -1,7 +1,9 @@
-﻿using Dapper;
+using Dapper;
 using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Domain.Production;
 using RPGEconomy.Infrastructure.Persistence.Queries;
+using System.Data;
+using System.Transactions;
 
 namespace RPGEconomy.Infrastructure.Persistence.Repositories;
 
@@ -15,41 +17,86 @@ public class BuildingRepository : IBuildingRepository
     public async Task<Building?> GetByIdAsync(int id)
     {
         using var conn = _factory.Create();
-        return await conn.QueryFirstOrDefaultAsync<Building>(
-            BuildingQueries.GetById, new { Id = id });
+
+        var building = await conn.QueryFirstOrDefaultAsync<Building>(BuildingQueries.GetById, new { Id = id });
+        if (building is null)
+            return null;
+
+        await LoadInputReservesAsync(conn, building);
+        return building;
     }
 
     public async Task<IReadOnlyList<Building>> GetBySettlementIdAsync(int settlementId)
     {
         using var conn = _factory.Create();
-        var result = await conn.QueryAsync<Building>(
-            BuildingQueries.GetBySettlementId, new { SettlementId = settlementId });
-        return result.ToList().AsReadOnly();
+        var result = (await conn.QueryAsync<Building>(
+            BuildingQueries.GetBySettlementId,
+            new { SettlementId = settlementId })).ToList();
+
+        foreach (var building in result)
+            await LoadInputReservesAsync(conn, building);
+
+        return result.AsReadOnly();
     }
 
     public async Task<int> SaveAsync(Building building)
     {
         using var conn = _factory.Create();
+        if (conn.State != ConnectionState.Open)
+            conn.Open();
 
+        var useLocalTransaction = Transaction.Current is null;
+        using var tx = useLocalTransaction ? conn.BeginTransaction() : null;
+
+        int buildingId;
         if (building.IsNew)
-            return await conn.ExecuteScalarAsync<int>(
-                BuildingQueries.Insert, new
+        {
+            buildingId = await conn.ExecuteScalarAsync<int>(
+                BuildingQueries.Insert,
+                new
                 {
                     building.Name,
                     building.SettlementId,
                     building.RecipeId,
                     building.WorkerCount,
-                    building.IsActive
-                });
-
-        await conn.ExecuteAsync(BuildingQueries.Update, new
+                    building.IsActive,
+                    building.InputReserveCoverageTicks
+                },
+                tx);
+        }
+        else
         {
-            building.Id,
-            building.Name,
-            building.WorkerCount,
-            building.IsActive
-        });
-        return building.Id;
+            buildingId = building.Id;
+            await conn.ExecuteAsync(
+                BuildingQueries.Update,
+                new
+                {
+                    building.Id,
+                    building.Name,
+                    building.WorkerCount,
+                    building.IsActive,
+                    building.InputReserveCoverageTicks
+                },
+                tx);
+        }
+
+        await conn.ExecuteAsync(BuildingQueries.DeleteInputReserves, new { BuildingId = buildingId }, tx);
+
+        if (building.InputReserveItems.Count > 0)
+        {
+            await conn.ExecuteAsync(
+                BuildingQueries.InsertInputReserve,
+                building.InputReserveItems.Select(item => new
+                {
+                    BuildingId = buildingId,
+                    item.ProductTypeId,
+                    item.Quantity
+                }),
+                tx);
+        }
+
+        tx?.Commit();
+        return buildingId;
     }
 
     public async Task DeleteAsync(int id)
@@ -57,5 +104,10 @@ public class BuildingRepository : IBuildingRepository
         using var conn = _factory.Create();
         await conn.ExecuteAsync(BuildingQueries.Delete, new { Id = id });
     }
-}
 
+    private static async Task LoadInputReservesAsync(IDbConnection conn, Building building)
+    {
+        var items = await conn.QueryAsync<BuildingInputReserveItem>(BuildingQueries.GetInputReserves, new { BuildingId = building.Id });
+        building.LoadInputReserveItems(items);
+    }
+}

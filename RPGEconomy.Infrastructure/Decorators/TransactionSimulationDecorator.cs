@@ -18,11 +18,13 @@ public class TransactionSimulationDecorator : ISimulationExecutor
     {
         using var scope = new TransactionScope(
             TransactionScopeOption.Required,
+            new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted },
             TransactionScopeAsyncFlowOption.Enabled);
 
         var result = await _inner.ExecuteAsync(request, cancellationToken);
+        if (result.IsSuccess)
+            scope.Complete();
 
-        scope.Complete();
         return result;
     }
 }

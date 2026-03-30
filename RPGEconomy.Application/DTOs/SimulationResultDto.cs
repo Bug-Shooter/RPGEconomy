@@ -4,5 +4,5 @@ public record SimulationResultDto(
     int WorldId,
     int DaysBefore,
     int DaysAfter,
-    IReadOnlyList<SettlementSummaryDto> Settlements
+    IReadOnlyList<SimulationSettlementDto> Settlements
 );

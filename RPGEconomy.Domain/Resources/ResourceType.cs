@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Domain.Common;
+using RPGEconomy.Domain.Common;
 
 namespace RPGEconomy.Domain.Resources;
 
@@ -10,8 +10,7 @@ public class ResourceType : AggregateRoot
     public double RegenerationRatePerDay { get; private set; }
 
     // Dapper
-    public ResourceType(int id, string name, string description,
-        bool isRenewable, double regenerationRatePerDay) : base(id)
+    public ResourceType(int id, string name, string description, bool isRenewable, double regenerationRatePerDay) : base(id)
     {
         Name = name;
         Description = description;
@@ -19,15 +18,40 @@ public class ResourceType : AggregateRoot
         RegenerationRatePerDay = regenerationRatePerDay;
     }
 
-    public static ResourceType Create(string name, string description,
-        bool isRenewable, double regenerationRatePerDay)
-        => new(0, name, description, isRenewable, regenerationRatePerDay);
-
-    public void Update(string name, string description, bool isRenewable, double regenerationRatePerDay)
+    public static Result<ResourceType> Create(string name, string description, bool isRenewable, double regenerationRatePerDay)
     {
+        var validation = Validate(name, description, regenerationRatePerDay);
+        if (!validation.IsSuccess)
+            return Result<ResourceType>.Failure(validation.Error!);
+
+        return Result<ResourceType>.Success(
+            new ResourceType(0, name, description, isRenewable, regenerationRatePerDay));
+    }
+
+    public Result Update(string name, string description, bool isRenewable, double regenerationRatePerDay)
+    {
+        var validation = Validate(name, description, regenerationRatePerDay);
+        if (!validation.IsSuccess)
+            return validation;
+
         Name = name;
         Description = description;
         IsRenewable = isRenewable;
         RegenerationRatePerDay = regenerationRatePerDay;
+        return Result.Success();
+    }
+
+    private static Result Validate(string name, string description, double regenerationRatePerDay)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return Result.Failure("Название ресурса не может быть пустым");
+
+        if (string.IsNullOrWhiteSpace(description))
+            return Result.Failure("Описание ресурса не может быть пустым");
+
+        if (regenerationRatePerDay < 0d)
+            return Result.Failure("Скорость восстановления не может быть отрицательной");
+
+        return Result.Success();
     }
 }

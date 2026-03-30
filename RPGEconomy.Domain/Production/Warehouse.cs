@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Domain.Common;
+using RPGEconomy.Domain.Common;
 using RPGEconomy.Domain.Resources;
 
 namespace RPGEconomy.Domain.Production;
@@ -19,9 +19,10 @@ public class Warehouse : AggregateRoot
     public static Warehouse Create(int settlementId)
         => new(0, settlementId);
 
-    public Result AddItem(int productTypeId, int quantity, QualityGrade quality)
+    public Result AddItem(int productTypeId, decimal quantity, QualityGrade quality)
     {
-        if (quantity <= 0) return Result.Failure("Количество должно быть больше нуля");
+        if (quantity <= 0m)
+            return Result.Failure("Количество должно быть больше нуля");
 
         var existing = _items.FirstOrDefault(i =>
             i.ProductTypeId == productTypeId && i.Quality == quality.Name);
@@ -34,8 +35,11 @@ public class Warehouse : AggregateRoot
         return Result.Success();
     }
 
-    public Result Withdraw(int productTypeId, int quantity, QualityGrade quality)
+    public Result Withdraw(int productTypeId, decimal quantity, QualityGrade quality)
     {
+        if (quantity <= 0m)
+            return Result.Failure("Количество должно быть больше нуля");
+
         var item = _items.FirstOrDefault(i =>
             i.ProductTypeId == productTypeId && i.Quality == quality.Name);
 
@@ -43,17 +47,49 @@ public class Warehouse : AggregateRoot
             return Result.Failure("Недостаточно товара на складе");
 
         item.DecreaseQuantity(quantity);
-        if (item.Quantity == 0) _items.Remove(item);
+        if (item.Quantity == 0m)
+            _items.Remove(item);
 
         return Result.Success();
     }
 
+    public Result SetItemQuantity(int productTypeId, decimal quantity, QualityGrade quality)
+    {
+        if (quantity < 0m)
+            return Result.Failure("Количество не может быть отрицательным");
+
+        var existing = _items.FirstOrDefault(i =>
+            i.ProductTypeId == productTypeId && i.Quality == quality.Name);
+
+        if (quantity == 0m)
+        {
+            if (existing is not null)
+                _items.Remove(existing);
+
+            return Result.Success();
+        }
+
+        if (existing is null)
+        {
+            _items.Add(InventoryItem.Create(Id, productTypeId, quantity, quality));
+            return Result.Success();
+        }
+
+        existing.SetQuantity(quantity);
+        return Result.Success();
+    }
+
     public bool CanFulfill(IEnumerable<RecipeIngredient> ingredients) =>
-        ingredients.All(ing =>
-            _items.Any(i =>
-                i.ProductTypeId == ing.ProductTypeId &&
-                i.Quality == QualityGrade.Normal.Name &&
-                i.Quantity >= ing.Quantity));
+        ingredients.All(ingredient =>
+            _items.Any(item =>
+                item.ProductTypeId == ingredient.ProductTypeId &&
+                item.Quality == QualityGrade.Normal.Name &&
+                item.Quantity >= ingredient.Quantity));
+
+    public decimal GetAvailableQuantity(int productTypeId, QualityGrade quality) =>
+        _items
+            .Where(item => item.ProductTypeId == productTypeId && item.Quality == quality.Name)
+            .Sum(item => item.Quantity);
 
     internal void LoadItems(IEnumerable<InventoryItem> items)
     {

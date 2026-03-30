@@ -66,11 +66,12 @@ public class SimulationService : ISimulationService
             return Result<SimulationResultDto>.Success(executionResult.Value!.Result);
         }
 
-        var failResult = job.MarkFailed(executionResult.Error ?? "Ошибка выполнения симуляции");
+        var error = executionResult.Error ?? "Ошибка выполнения симуляции";
+        var failResult = job.MarkFailed(error);
         if (!failResult.IsSuccess)
             return Result<SimulationResultDto>.Failure(failResult.Error!);
 
         await _simulationJobRepository.SaveAsync(job);
-        return Result<SimulationResultDto>.Failure(executionResult.Error ?? "Ошибка выполнения симуляции");
+        return Result<SimulationResultDto>.Failure(error);
     }
 }

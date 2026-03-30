@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Application.Abstractions.Repositories;
+using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.Abstractions.Services;
 using RPGEconomy.Application.DTOs;
 using RPGEconomy.Domain.Common;
@@ -15,7 +15,9 @@ public class ProductTypeService : IProductTypeService
     public async Task<Result<ProductTypeDto>> GetByIdAsync(int id)
     {
         var product = await _repo.GetByIdAsync(id);
-        if (product is null) return Result<ProductTypeDto>.Failure($"Товар с Id {id} не найден");
+        if (product is null)
+            return Result<ProductTypeDto>.Failure($"Товар с Id {id} не найден");
+
         return Result<ProductTypeDto>.Success(ToDto(product));
     }
 
@@ -27,32 +29,35 @@ public class ProductTypeService : IProductTypeService
     }
 
     public async Task<Result<ProductTypeDto>> CreateAsync(
-        string name, string description, double basePrice, double weightPerUnit)
+        string name,
+        string description,
+        decimal basePrice,
+        double weightPerUnit)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return Result<ProductTypeDto>.Failure("Название товара не может быть пустым");
+        var createResult = ProductType.Create(name, description, basePrice, weightPerUnit);
+        if (!createResult.IsSuccess)
+            return Result<ProductTypeDto>.Failure(createResult.Error!);
 
-        if (basePrice <= 0)
-            return Result<ProductTypeDto>.Failure("Базовая цена должна быть больше нуля");
-
-        var product = ProductType.Create(name, description, basePrice, weightPerUnit);
+        var product = createResult.Value!;
         var id = await _repo.SaveAsync(product);
         return Result<ProductTypeDto>.Success(ToDto(product) with { Id = id });
     }
 
     public async Task<Result<ProductTypeDto>> UpdateAsync(
-        int id, string name, string description, double basePrice, double weightPerUnit)
+        int id,
+        string name,
+        string description,
+        decimal basePrice,
+        double weightPerUnit)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return Result<ProductTypeDto>.Failure("Название товара не может быть пустым");
-
-        if (basePrice <= 0)
-            return Result<ProductTypeDto>.Failure("Базовая цена должна быть больше нуля");
-
         var product = await _repo.GetByIdAsync(id);
-        if (product is null) return Result<ProductTypeDto>.Failure($"Товар с Id {id} не найден");
+        if (product is null)
+            return Result<ProductTypeDto>.Failure($"Товар с Id {id} не найден");
 
-        product.Update(name, description, basePrice, weightPerUnit);
+        var updateResult = product.Update(name, description, basePrice, weightPerUnit);
+        if (!updateResult.IsSuccess)
+            return Result<ProductTypeDto>.Failure(updateResult.Error!);
+
         await _repo.SaveAsync(product);
         return Result<ProductTypeDto>.Success(ToDto(product));
     }
@@ -60,12 +65,19 @@ public class ProductTypeService : IProductTypeService
     public async Task<Result> DeleteAsync(int id)
     {
         var product = await _repo.GetByIdAsync(id);
-        if (product is null) return Result.Failure($"Товар с Id {id} не найден");
+        if (product is null)
+            return Result.Failure($"Товар с Id {id} не найден");
+
+        if (await _repo.IsInUseAsync(id))
+        {
+            return Result.Failure(
+                "Нельзя удалить тип товара, пока он используется в рецептах, рынках, складах или профилях потребления");
+        }
 
         await _repo.DeleteAsync(id);
         return Result.Success();
     }
 
-    private static ProductTypeDto ToDto(ProductType p) =>
-        new(p.Id, p.Name, p.Description, p.BasePrice, p.WeightPerUnit);
+    private static ProductTypeDto ToDto(ProductType product) =>
+        new(product.Id, product.Name, product.Description, product.BasePrice, product.WeightPerUnit);
 }

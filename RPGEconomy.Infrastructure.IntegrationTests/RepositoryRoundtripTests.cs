@@ -21,7 +21,9 @@ public class RepositoryRoundtripTests
         await Testing.PostgresTestDatabase.ResetAsync();
         var repository = new WorldRepository(new NpgsqlConnectionFactory(Testing.PostgresTestDatabase.ConnectionString));
 
-        var worldId = await repository.SaveAsync(WorldEntity.Create("Earth", "Desc"));
+        var createResult = WorldEntity.Create("Earth", "Desc");
+        createResult.IsSuccess.Should().BeTrue();
+        var worldId = await repository.SaveAsync(createResult.Value!);
         var stored = await repository.GetByIdAsync(worldId);
 
         stored.Should().NotBeNull();
@@ -45,7 +47,9 @@ public class RepositoryRoundtripTests
         var factory = new NpgsqlConnectionFactory(Testing.PostgresTestDatabase.ConnectionString);
         var worldRepository = new WorldRepository(factory);
         var jobRepository = new SimulationJobRepository(factory);
-        var worldId = await worldRepository.SaveAsync(WorldEntity.Create("Earth", "Desc"));
+        var createResult = WorldEntity.Create("Earth", "Desc");
+        createResult.IsSuccess.Should().BeTrue();
+        var worldId = await worldRepository.SaveAsync(createResult.Value!);
 
         var jobId = await jobRepository.SaveAsync(SimulationJob.Create(worldId, 2));
         var job = await jobRepository.GetByIdAsync(jobId);

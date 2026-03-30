@@ -4,4 +4,4 @@ public record CurrencyDto(
     int Id,
     string Name,
     string Code,
-    double ExchangeRateToBase);
+    decimal ExchangeRateToBase);

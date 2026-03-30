@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using RPGEconomy.Application.Abstractions.Services;
 
 namespace RPGEconomy.API.Controllers;
@@ -28,9 +28,7 @@ public class SimulationController : ControllerBase
 
     // POST api/worlds/{worldId}/simulation/advance
     [HttpPost("advance")]
-    public async Task<IActionResult> Advance(
-            int worldId,
-            [FromBody] AdvanceTimeRequest request)
+    public async Task<IActionResult> Advance(int worldId, [FromBody] AdvanceTimeRequest request)
     {
         if (request.Days <= 0)
             return BadRequest("Количество дней должно быть больше нуля");

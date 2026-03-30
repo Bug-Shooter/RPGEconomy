@@ -61,5 +61,5 @@ public class ProductTypesController : ControllerBase
 public record CreateProductTypeRequest(
     string Name,
     string Description,
-    double BasePrice,
+    decimal BasePrice,
     double WeightPerUnit);

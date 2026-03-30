@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using RPGEconomy.Application.Abstractions.Services;
 
 namespace RPGEconomy.API.Controllers;
@@ -30,25 +30,23 @@ public class SettlementsController : ControllerBase
 
     // POST api/worlds/{worldId}/settlements
     [HttpPost]
-    public async Task<IActionResult> Create(
-    int worldId,
-    [FromBody] CreateSettlementRequest request)
+    public async Task<IActionResult> Create(int worldId, [FromBody] SettlementRequest request)
     {
-        var result = await _settlementService.CreateAsync(worldId, request.Name, request.Population);
-        if (!result.IsSuccess) return BadRequest(result.Error);
+        var result = await _settlementService.CreateAsync(worldId, request.Name);
+        if (!result.IsSuccess)
+            return BadRequest(result.Error);
 
-        return CreatedAtAction(nameof(GetById),
+        return CreatedAtAction(
+            nameof(GetById),
             new { worldId, id = result.Value!.SettlementId },
             result.Value);
     }
 
     // PUT api/worlds/{worldId}/settlements/{id}
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(
-        int worldId, int id,
-        [FromBody] CreateSettlementRequest request)
+    public async Task<IActionResult> Update(int worldId, int id, [FromBody] SettlementRequest request)
     {
-        var result = await _settlementService.UpdateAsync(id, request.Name, request.Population);
+        var result = await _settlementService.UpdateAsync(id, request.Name);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
@@ -61,4 +59,4 @@ public class SettlementsController : ControllerBase
     }
 }
 
-public record CreateSettlementRequest(string Name, int Population);
+public record SettlementRequest(string Name);

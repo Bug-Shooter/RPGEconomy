@@ -35,7 +35,7 @@ public class BuildingsController : ControllerBase
         [FromBody] CreateBuildingRequest request)
     {
         var result = await _buildingService.CreateAsync(
-            settlementId, request.Name, request.RecipeId, request.WorkerCount);
+            settlementId, request.Name, request.RecipeId, request.WorkerCount, request.InputReserveCoverageTicks);
 
         if (!result.IsSuccess) return BadRequest(result.Error);
         return CreatedAtAction(nameof(GetById),
@@ -48,7 +48,7 @@ public class BuildingsController : ControllerBase
         int settlementId, int id,
         [FromBody] UpdateBuildingRequest request)
     {
-        var result = await _buildingService.UpdateAsync(id, request.Name, request.WorkerCount);
+        var result = await _buildingService.UpdateAsync(id, request.Name, request.WorkerCount, request.InputReserveCoverageTicks);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
@@ -76,5 +76,5 @@ public class BuildingsController : ControllerBase
     }
 }
 
-public record CreateBuildingRequest(string Name, int RecipeId, int WorkerCount);
-public record UpdateBuildingRequest(string Name, int WorkerCount);
+public record CreateBuildingRequest(string Name, int RecipeId, int WorkerCount, decimal InputReserveCoverageTicks);
+public record UpdateBuildingRequest(string Name, int WorkerCount, decimal InputReserveCoverageTicks);

@@ -1,4 +1,4 @@
-﻿using RPGEconomy.Application.Abstractions.Repositories;
+using RPGEconomy.Application.Abstractions.Repositories;
 using RPGEconomy.Application.Abstractions.Services;
 using RPGEconomy.Application.DTOs;
 using RPGEconomy.Domain.Common;
@@ -9,9 +9,15 @@ namespace RPGEconomy.Application.Services;
 public class RecipeService : IRecipeService
 {
     private readonly IProductionRecipeRepository _recipeRepo;
+    private readonly IProductTypeRepository _productTypeRepo;
 
-    public RecipeService(IProductionRecipeRepository recipeRepo)
-        => _recipeRepo = recipeRepo;
+    public RecipeService(
+        IProductionRecipeRepository recipeRepo,
+        IProductTypeRepository productTypeRepo)
+    {
+        _recipeRepo = recipeRepo;
+        _productTypeRepo = productTypeRepo;
+    }
 
     public async Task<Result<RecipeDto>> GetByIdAsync(int id)
     {
@@ -30,44 +36,58 @@ public class RecipeService : IRecipeService
     }
 
     public async Task<Result<RecipeDto>> CreateAsync(
-        string name, double laborDaysRequired,
+        string name,
+        double laborDaysRequired,
         IEnumerable<RecipeIngredientDto> inputs,
         IEnumerable<RecipeIngredientDto> outputs)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return Result<RecipeDto>.Failure("Название рецепта не может быть пустым");
+        var inputList = inputs.ToList();
+        var outputList = outputs.ToList();
 
-        if (laborDaysRequired <= 0)
-            return Result<RecipeDto>.Failure("Трудозатраты должны быть больше нуля");
+        var productValidation = await ValidateProductTypesAsync(inputList, outputList);
+        if (!productValidation.IsSuccess)
+            return Result<RecipeDto>.Failure(productValidation.Error!);
 
-        var recipe = ProductionRecipe.Create(
-            name, laborDaysRequired,
-            inputs.Select(i => new RecipeIngredient(i.ProductTypeId, i.Quantity)),
-            outputs.Select(o => new RecipeIngredient(o.ProductTypeId, o.Quantity)));
+        var createResult = ProductionRecipe.Create(
+            name,
+            laborDaysRequired,
+            inputList.Select(item => new RecipeIngredient(item.ProductTypeId, item.Quantity)),
+            outputList.Select(item => new RecipeIngredient(item.ProductTypeId, item.Quantity)));
 
+        if (!createResult.IsSuccess)
+            return Result<RecipeDto>.Failure(createResult.Error!);
+
+        var recipe = createResult.Value!;
         var id = await _recipeRepo.SaveAsync(recipe);
         return Result<RecipeDto>.Success(ToDto(recipe) with { Id = id });
     }
 
     public async Task<Result<RecipeDto>> UpdateAsync(
-        int id, string name, double laborDaysRequired,
+        int id,
+        string name,
+        double laborDaysRequired,
         IEnumerable<RecipeIngredientDto> inputs,
         IEnumerable<RecipeIngredientDto> outputs)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return Result<RecipeDto>.Failure("Название рецепта не может быть пустым");
-
-        if (laborDaysRequired <= 0)
-            return Result<RecipeDto>.Failure("Трудозатраты должны быть больше нуля");
-
         var recipe = await _recipeRepo.GetByIdAsync(id);
         if (recipe is null)
             return Result<RecipeDto>.Failure($"Рецепт с Id {id} не найден");
 
-        recipe.Update(
-            name, laborDaysRequired,
-            inputs.Select(i => new RecipeIngredient(i.ProductTypeId, i.Quantity)),
-            outputs.Select(o => new RecipeIngredient(o.ProductTypeId, o.Quantity)));
+        var inputList = inputs.ToList();
+        var outputList = outputs.ToList();
+
+        var productValidation = await ValidateProductTypesAsync(inputList, outputList);
+        if (!productValidation.IsSuccess)
+            return Result<RecipeDto>.Failure(productValidation.Error!);
+
+        var updateResult = recipe.Update(
+            name,
+            laborDaysRequired,
+            inputList.Select(item => new RecipeIngredient(item.ProductTypeId, item.Quantity)),
+            outputList.Select(item => new RecipeIngredient(item.ProductTypeId, item.Quantity)));
+
+        if (!updateResult.IsSuccess)
+            return Result<RecipeDto>.Failure(updateResult.Error!);
 
         await _recipeRepo.SaveAsync(recipe);
         return Result<RecipeDto>.Success(ToDto(recipe));
@@ -76,14 +96,37 @@ public class RecipeService : IRecipeService
     public async Task<Result> DeleteAsync(int id)
     {
         var recipe = await _recipeRepo.GetByIdAsync(id);
-        if (recipe is null) return Result.Failure($"Рецепт с Id {id} не найден");
+        if (recipe is null)
+            return Result.Failure($"Рецепт с Id {id} не найден");
 
         await _recipeRepo.DeleteAsync(id);
         return Result.Success();
     }
 
-    private static RecipeDto ToDto(ProductionRecipe r) => new(
-        r.Id, r.Name, r.LaborDaysRequired,
-        r.Inputs.Select(i => new RecipeIngredientDto(i.ProductTypeId, i.Quantity)).ToList().AsReadOnly(),
-        r.Outputs.Select(o => new RecipeIngredientDto(o.ProductTypeId, o.Quantity)).ToList().AsReadOnly());
+    private async Task<Result> ValidateProductTypesAsync(
+        IEnumerable<RecipeIngredientDto> inputs,
+        IEnumerable<RecipeIngredientDto> outputs)
+    {
+        var productTypeIds = inputs
+            .Concat(outputs)
+            .Select(item => item.ProductTypeId)
+            .Distinct()
+            .ToList();
+
+        foreach (var productTypeId in productTypeIds)
+        {
+            var productType = await _productTypeRepo.GetByIdAsync(productTypeId);
+            if (productType is null)
+                return Result.Failure($"Тип товара с Id {productTypeId} не найден");
+        }
+
+        return Result.Success();
+    }
+
+    private static RecipeDto ToDto(ProductionRecipe recipe) => new(
+        recipe.Id,
+        recipe.Name,
+        recipe.LaborDaysRequired,
+        recipe.Inputs.Select(item => new RecipeIngredientDto(item.ProductTypeId, item.Quantity)).ToList().AsReadOnly(),
+        recipe.Outputs.Select(item => new RecipeIngredientDto(item.ProductTypeId, item.Quantity)).ToList().AsReadOnly());
 }

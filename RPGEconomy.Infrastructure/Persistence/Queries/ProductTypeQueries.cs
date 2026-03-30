@@ -19,6 +19,24 @@ internal static class ProductTypeQueries
         WHERE name = @Name
         """;
 
+    public const string IsInUse = """
+        SELECT EXISTS(
+            SELECT 1 FROM inventory_items WHERE product_type_id = @Id
+            UNION ALL
+            SELECT 1 FROM market_offers WHERE product_type_id = @Id
+            UNION ALL
+            SELECT 1 FROM recipe_ingredients WHERE product_type_id = @Id
+            UNION ALL
+            SELECT 1 FROM population_group_consumption WHERE product_type_id = @Id
+            UNION ALL
+            SELECT 1 FROM population_group_stocks WHERE product_type_id = @Id
+            UNION ALL
+            SELECT 1 FROM building_input_reserves WHERE product_type_id = @Id
+            UNION ALL
+            SELECT 1 FROM economic_effects WHERE product_type_id = @Id
+        );
+        """;
+
     public const string Insert = """
         INSERT INTO product_types (name, description, base_price, weight_per_unit)
         VALUES (@Name, @Description, @BasePrice, @WeightPerUnit)

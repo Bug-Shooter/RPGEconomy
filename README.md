@@ -1,15 +1,12 @@
 # RPG Economy Simulation
 
-A backend simulation of a medieval RPG economy. Settlements produce goods, 
-trade on local markets, and prices shift dynamically based on supply and demand.
+A backend simulation of a medieval RPG economy. Settlements produce goods, population groups create demand, and local market prices shift dynamically from aggregated supply and demand.
 
-# Core Concepts
-World — top-level container with a day counter 
+## Core Concepts
 
-Settlement — a city with population, buildings, and a local market
-
-Building — produces goods using recipes each simulation day
-
-Market — tracks supply, demand, and dynamic pricing per product
-
-Simulation — advance the world by N days, triggering production and trade cycles
+- `World` — top-level container with a day counter
+- `Settlement` — a city with a warehouse, market, and synchronized population summary
+- `Building` — the practical producer layer, creating supply through recipes
+- `PopulationGroup` — aggregated residents with a consumption profile that creates demand
+- `Market` — tracks supply, demand, and dynamic pricing per product
+- `Simulation` — advances the world by N days, running production and settlement-economy ticks

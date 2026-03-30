@@ -37,4 +37,9 @@ internal static class MarketQueries
         VALUES
             (@MarketId, @ProductTypeId, @CurrentPrice, @SupplyVolume, @DemandVolume)
         """;
+
+    public const string Delete = """
+        DELETE FROM markets
+        WHERE id = @Id
+        """;
 }
